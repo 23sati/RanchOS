@@ -1,0 +1,66 @@
+﻿≡ƒÜÇ RanchOS API is running on port 3001
+node.exe : node:events:486
+At line:1 char:1
++ & "C:\Program 
+Files\nodejs/node.exe" 
+"C:\Program 
+Files\nodejs/node_mo ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~
+    + CategoryInfo         
+     : NotSpecified: (nod  
+  e:events:486:String) [   
+ ], RemoteException
+    + FullyQualifiedErrorI 
+   d : NativeCommandError
+ 
+      throw er; // 
+Unhandled 'error' event
+      ^
+
+Error: listen EADDRINUSE: 
+address already in use 
+:::3001
+    at 
+Server.setupListenHandle 
+[as _listen2] 
+(node:net:1940:16)
+    at listenInCluster 
+(node:net:1997:12)
+    at Server.listen 
+(node:net:2102:7)
+    at serve (file:///C:/Us
+ers/sati1/Desktop/RanchOS/n
+ode_modules/@hono/node-serv
+er/dist/index.mjs:629:10)
+    at <anonymous> (C:\User
+s\sati1\Desktop\RanchOS\app
+s\api\src\index.ts:87:1)
+    at ModuleJob.run (node:
+internal/modules/esm/module
+_job:413:25)
+    at async onImport.trace
+Promise.__proto__ (node:int
+ernal/modules/esm/loader:66
+0:26)
+    at async asyncRunEntryP
+ointWithESMLoader (node:int
+ernal/modules/run_main:101:
+5)
+Emitted 'error' event on 
+Server instance at:
+    at emitErrorNT 
+(node:net:1976:8)
+    at process.processTicks
+AndRejections (node:interna
+l/process/task_queues:89:21
+) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '::',
+  port: 3001
+}
+
+Node.js v24.12.0

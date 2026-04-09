@@ -1,0 +1,11 @@
+{
+  "name": "@ranchos/i18n",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./src/index.ts",
+  "dependencies": {
+    "i18next": "^23.0.0",
+    "react-i18next": "^14.0.0",
+    "i18next-resources-to-backend": "^1.2.0"
+  }
+}

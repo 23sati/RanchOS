@@ -1,0 +1,32 @@
+﻿
+> @ranchos/db@0.1.0 db:generate
+> drizzle-kit generate --config=drizzle.config.ts
+
+Reading config file 'C:\Users\sati1\Desktop\RanchOS\packages\db\drizzle.config.ts'
+24 tables
+alert_rules 10 columns 0 indexes 2 fks
+application_records 37 columns 2 indexes 8 fks
+block_irrigation_config 23 columns 0 indexes 2 fks
+block_seasons 11 columns 0 indexes 1 fks
+blocks 22 columns 4 indexes 3 fks
+cimis_stations 7 columns 0 indexes 0 fks
+crew_members 15 columns 1 indexes 2 fks
+et_data 11 columns 1 indexes 1 fks
+frost_alert_config 9 columns 0 indexes 1 fks
+harvest_events 21 columns 0 indexes 4 fks
+irrigation_events 17 columns 1 indexes 4 fks
+labor_entries 23 columns 2 indexes 6 fks
+org_integrations 10 columns 0 indexes 1 fks
+organizations 12 columns 0 indexes 0 fks
+pest_species 10 columns 0 indexes 0 fks
+products 19 columns 2 indexes 0 fks
+profiles 11 columns 2 indexes 2 fks
+ranches 9 columns 1 indexes 1 fks
+scouting_logs 15 columns 1 indexes 4 fks
+subscriptions 12 columns 0 indexes 1 fks
+task_assignments 3 columns 1 indexes 2 fks
+task_blocks 2 columns 1 indexes 2 fks
+task_types 8 columns 0 indexes 1 fks
+tasks 19 columns 2 indexes 5 fks
+
+[Γ£ô] Your SQL migration file Γ₧£ drizzle\0001_whole_greymalkin.sql ≡ƒÜÇ

@@ -1,0 +1,21 @@
+{
+  "name": "@ranchos/db",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "db:generate": "drizzle-kit generate --config=drizzle.config.ts",
+    "db:migrate": "tsx src/migrate.ts"
+  },
+  "dependencies": {
+    "tsx": "^4.7.1",
+    "drizzle-orm": "^0.45.0",
+    "pg": "^8.11.0",
+    "better-auth": "^1.1.0"
+  },
+  "devDependencies": {
+    "drizzle-kit": "^0.31.0",
+    "@types/pg": "^8.11.0"
+  }
+}

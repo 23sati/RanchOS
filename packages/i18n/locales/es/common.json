@@ -1,0 +1,41 @@
+{
+  "app_name": "RanchOS",
+  "nav": {
+    "dashboard": "Panel Principal",
+    "blocks": "Bloques",
+    "tasks": "Tareas",
+    "irrigation": "Riego",
+    "scouting": "Monitoreo",
+    "records": "Registros",
+    "labor": "Labor",
+    "compliance": "Cumplimiento",
+    "settings": "Configuración"
+  },
+  "actions": {
+    "save": "Guardar",
+    "cancel": "Cancelar",
+    "delete": "Eliminar",
+    "edit": "Editar",
+    "add": "Agregar",
+    "submit": "Enviar",
+    "back": "Regresar",
+    "next": "Siguiente",
+    "done": "Listo",
+    "search": "Buscar"
+  },
+  "status": {
+    "pending": "Pendiente",
+    "in_progress": "En Progreso",
+    "completed": "Completado",
+    "overdue": "Vencido"
+  },
+  "sync": {
+    "syncing": "Sincronizando...",
+    "synced": "Sincronizado",
+    "offline": "Sin conexión — cambios guardados localmente"
+  },
+  "organic": {
+    "badge": "Orgánico",
+    "warning": "Este bloque es certificado orgánico. Solo se permiten insumos aprobados por OMRI."
+  }
+}

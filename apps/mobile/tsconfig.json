@@ -1,0 +1,13 @@
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true,
+    "noEmit": true
+  },
+  "include": [
+    "src/app/(tabs)/index.tsx",
+    "src/app/tasks/complete.tsx",
+    "src/lib/tasks.ts",
+    "src/types/**/*.d.ts"
+  ]
+}
