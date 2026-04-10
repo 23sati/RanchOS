@@ -1,0 +1,9 @@
+2026-04-10T03:06:30.878Z navigated signup
+2026-04-10T03:06:31.103Z error Error: Timed out waiting for condition: document.readyState === 'complete' && !!document.querySelector('input[placeholder="Work Email"]')
+    at waitForCondition (file:///C:/Users/sati1/Desktop/RanchOS/[eval1]:19:241)
+    at async file:///C:/Users/sati1/Desktop/RanchOS/[eval1]:37:2
+2026-04-10T03:06:31.372Z cleanup done
+2026-04-10T03:06:51.087Z error Error: Timed out waiting for condition: document.readyState === 'complete' && !!document.querySelector('input[placeholder="Work Email"]')
+    at waitForCondition (file:///C:/Users/sati1/Desktop/RanchOS/[eval1]:19:241)
+    at async file:///C:/Users/sati1/Desktop/RanchOS/[eval1]:38:2
+2026-04-10T03:06:51.387Z cleanup done

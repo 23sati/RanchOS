@@ -1,5 +1,11 @@
 # RanchOS Done vs Remaining By Phase
 
+Superseded as the primary status file on 2026-04-09.
+
+Use [CURRENT_STATE_2026-04-09.md](/C:/Users/sati1/Desktop/RanchOS/reference_folder/CURRENT_STATE_2026-04-09.md) first for current verified state.
+
+This file is retained for historical comparison against the earlier phase plans, but parts of its "Remaining" sections are now stale because multiple slices were completed after 2026-04-06.
+
 Last updated: 2026-04-06
 Workspace: `C:\Users\sati1\Desktop\RanchOS`
 
