@@ -23,19 +23,7 @@ import {
   toNumber,
   addDays,
 } from './intelligenceRecommendations';
-
-const PEST_MODELS = {
-  NOW: {
-    threshold: 1350,
-    label: 'Navel Orangeworm',
-    applicableCrops: ['almond', 'navel_orange', 'valencia_orange'] as const,
-  },
-  PTB: {
-    threshold: 260,
-    label: 'Peach Twig Borer',
-    applicableCrops: ['almond'] as const,
-  },
-} as const;
+import { DEGREE_DAY_MODELS as PEST_MODELS } from './degreeDayModels';
 
 function getMonthKc(config: {
   kcJan?: string | null;
@@ -495,26 +483,26 @@ function buildEnvironmentalCandidates(input: {
       const latestDegreeDay = latestDegreeDayByStationModel.get(`${stationId}:${modelKey}`);
       const cumulativeDd = toNumber(latestDegreeDay?.cumulativeDd) ?? 0;
 
-      if (cumulativeDd >= model.threshold) {
+    if (cumulativeDd >= model.actionThresholdDd) {
         scoutDriverLabel = `${model.label} is already active`;
         scoutUrgency = 'warning';
         scoutDriverData = {
           pestModel: modelKey,
           cumulativeDd,
-          thresholdDd: model.threshold,
+        thresholdDd: model.actionThresholdDd,
           degreeDayDate: latestDegreeDay?.date ?? null,
         };
         break;
       }
 
       const thresholdRatio = modelKey === 'NOW' ? 0.85 : 0.8;
-      if (cumulativeDd >= model.threshold * thresholdRatio) {
+    if (cumulativeDd >= model.actionThresholdDd * thresholdRatio) {
         scoutDriverLabel = `${model.label} timing is approaching`;
         scoutUrgency = 'suggestion';
         scoutDriverData = {
           pestModel: modelKey,
           cumulativeDd,
-          thresholdDd: model.threshold,
+        thresholdDd: model.actionThresholdDd,
           degreeDayDate: latestDegreeDay?.date ?? null,
         };
         break;
@@ -580,39 +568,39 @@ function buildEnvironmentalCandidates(input: {
       const season = seasonByBlockId.get(block.id);
 
       if (modelKey === 'NOW' && block.cropType === 'almond' && !season?.hullSplitStart) {
-        if (cumulativeDd >= model.threshold) {
+      if (cumulativeDd >= model.actionThresholdDd) {
           pushCandidate(candidates, {
             blockId: block.id,
             recommendationType: 'hull_split',
             titleEn: `Hull split timing is active in ${block.name}`,
             titleEs: `La ventana de apertura esta activa en ${block.name}`,
-            bodyEn: `${model.label} degree days have reached ${cumulativeDd.toFixed(0)} at station ${stationId}, which is past the ${model.threshold} threshold. Use this block as a hull split watch candidate now.`,
-            bodyEs: `Los grados-dia de ${model.label} llegaron a ${cumulativeDd.toFixed(0)} en la estacion ${stationId}, arriba del umbral ${model.threshold}. Usa este bloque como candidato para vigilar apertura ahora.`,
+              bodyEn: `${model.label} degree days have reached ${cumulativeDd.toFixed(0)} at station ${stationId}, which is past the ${model.actionThresholdDd} threshold. Use this block as a hull split watch candidate now.`,
+              bodyEs: `Los grados-dia de ${model.label} llegaron a ${cumulativeDd.toFixed(0)} en la estacion ${stationId}, arriba del umbral ${model.actionThresholdDd}. Usa este bloque como candidato para vigilar apertura ahora.`,
             urgency: 'warning',
             dataInputs: {
               sourceCategory: 'seasonal',
               stationId,
               pestModel: modelKey,
               cumulativeDd,
-              thresholdDd: model.threshold,
+                thresholdDd: model.actionThresholdDd,
               degreeDayDate: latestDegreeDay.date,
             },
           });
-        } else if (cumulativeDd >= model.threshold * 0.85) {
+      } else if (cumulativeDd >= model.actionThresholdDd * 0.85) {
           pushCandidate(candidates, {
             blockId: block.id,
             recommendationType: 'hull_split',
             titleEn: `Hull split timing is approaching in ${block.name}`,
             titleEs: `La apertura se acerca en ${block.name}`,
-            bodyEn: `${model.label} degree days are at ${cumulativeDd.toFixed(0)} out of ${model.threshold} for station ${stationId}. Start lining up scouting and spray readiness for hull split timing.`,
-            bodyEs: `Los grados-dia de ${model.label} van en ${cumulativeDd.toFixed(0)} de ${model.threshold} para la estacion ${stationId}. Empieza a preparar monitoreo y aplicacion para la apertura.`,
+              bodyEn: `${model.label} degree days are at ${cumulativeDd.toFixed(0)} out of ${model.actionThresholdDd} for station ${stationId}. Start lining up scouting and spray readiness for hull split timing.`,
+              bodyEs: `Los grados-dia de ${model.label} van en ${cumulativeDd.toFixed(0)} de ${model.actionThresholdDd} para la estacion ${stationId}. Empieza a preparar monitoreo y aplicacion para la apertura.`,
             urgency: 'suggestion',
             dataInputs: {
               sourceCategory: 'seasonal',
               stationId,
               pestModel: modelKey,
               cumulativeDd,
-              thresholdDd: model.threshold,
+                thresholdDd: model.actionThresholdDd,
               degreeDayDate: latestDegreeDay.date,
             },
           });
@@ -620,39 +608,39 @@ function buildEnvironmentalCandidates(input: {
       }
 
       if (modelKey === 'PTB') {
-        if (cumulativeDd >= model.threshold) {
+      if (cumulativeDd >= model.actionThresholdDd) {
           pushCandidate(candidates, {
             blockId: block.id,
             recommendationType: 'pest_action',
             titleEn: `${model.label} timing is active in ${block.name}`,
             titleEs: `El tiempo de ${model.label} esta activo en ${block.name}`,
-            bodyEn: `${model.label} degree days are at ${cumulativeDd.toFixed(0)} for station ${stationId}, above the ${model.threshold} threshold. Prioritize scouting and any planned response in this block.`,
-            bodyEs: `Los grados-dia de ${model.label} estan en ${cumulativeDd.toFixed(0)} para la estacion ${stationId}, arriba del umbral ${model.threshold}. Prioriza monitoreo y cualquier respuesta planeada en este bloque.`,
+              bodyEn: `${model.label} degree days are at ${cumulativeDd.toFixed(0)} for station ${stationId}, above the ${model.actionThresholdDd} threshold. Prioritize scouting and any planned response in this block.`,
+              bodyEs: `Los grados-dia de ${model.label} estan en ${cumulativeDd.toFixed(0)} para la estacion ${stationId}, arriba del umbral ${model.actionThresholdDd}. Prioriza monitoreo y cualquier respuesta planeada en este bloque.`,
             urgency: 'warning',
             dataInputs: {
               sourceCategory: 'seasonal',
               stationId,
               pestModel: modelKey,
               cumulativeDd,
-              thresholdDd: model.threshold,
+                thresholdDd: model.actionThresholdDd,
               degreeDayDate: latestDegreeDay.date,
             },
           });
-        } else if (cumulativeDd >= model.threshold * 0.8) {
+      } else if (cumulativeDd >= model.actionThresholdDd * 0.8) {
           pushCandidate(candidates, {
             blockId: block.id,
             recommendationType: 'pest_action',
             titleEn: `${model.label} timing is approaching in ${block.name}`,
             titleEs: `El tiempo de ${model.label} se acerca en ${block.name}`,
-            bodyEn: `${model.label} degree days are at ${cumulativeDd.toFixed(0)} out of ${model.threshold} for station ${stationId}. Queue scouting before the threshold fully arrives.`,
-            bodyEs: `Los grados-dia de ${model.label} van en ${cumulativeDd.toFixed(0)} de ${model.threshold} para la estacion ${stationId}. Programa monitoreo antes de que llegue todo el umbral.`,
+              bodyEn: `${model.label} degree days are at ${cumulativeDd.toFixed(0)} out of ${model.actionThresholdDd} for station ${stationId}. Queue scouting before the threshold fully arrives.`,
+              bodyEs: `Los grados-dia de ${model.label} van en ${cumulativeDd.toFixed(0)} de ${model.actionThresholdDd} para la estacion ${stationId}. Programa monitoreo antes de que llegue todo el umbral.`,
             urgency: 'suggestion',
             dataInputs: {
               sourceCategory: 'seasonal',
               stationId,
               pestModel: modelKey,
               cumulativeDd,
-              thresholdDd: model.threshold,
+                thresholdDd: model.actionThresholdDd,
               degreeDayDate: latestDegreeDay.date,
             },
           });

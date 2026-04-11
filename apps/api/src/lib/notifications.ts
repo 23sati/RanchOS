@@ -495,15 +495,22 @@ export async function syncNotificationDeliveries(orgId: string) {
   }> = [];
 
   for (const notification of eligibleNotifications) {
-    for (const recipient of recipients) {
+    const metadata =
+      notification.metadata && typeof notification.metadata === 'object'
+        ? (notification.metadata as Record<string, unknown>)
+        : {};
+    const targetProfileIds = Array.isArray(metadata.targetProfileIds)
+      ? metadata.targetProfileIds.filter((value): value is string => typeof value === 'string')
+      : null;
+    const targetRecipients = targetProfileIds
+      ? recipients.filter((recipient) => targetProfileIds.includes(recipient.id))
+      : recipients;
+
+    for (const recipient of targetRecipients) {
       const key = `${notification.id}:${recipient.id}:push`;
       desiredKeys.add(key);
-
       const preferredLocale = recipient.preferredLocale === 'es' ? 'es' : 'en';
-      const metadata =
-        notification.metadata && typeof notification.metadata === 'object'
-          ? (notification.metadata as Record<string, unknown>)
-          : {};
+
       const payload = {
         expoPushToken: recipient.expoPushToken,
         locale: preferredLocale,

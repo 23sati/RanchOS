@@ -119,6 +119,11 @@ function roundNumber(value: number, scale = 2) {
   return Math.round(value * factor) / factor;
 }
 
+function toNumber(value: string | number | null | undefined) {
+  const parsed = typeof value === 'number' ? value : Number(value ?? 0);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
 function formatDecimal(value: number | null, scale = 2) {
   return value === null ? null : value.toFixed(scale);
 }
@@ -446,6 +451,190 @@ function summarizeRecentLabor(entries: Awaited<ReturnType<typeof buildLaborEntry
     );
 }
 
+function summarizePayroll(entries: Awaited<ReturnType<typeof buildLaborEntryPayloads>>) {
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - 6);
+  const cutoffDate = cutoff.toISOString().slice(0, 10);
+
+  return entries.reduce(
+    (summary, entry) => {
+      const hoursWorked = toNumber(entry.hoursWorked);
+      const grossPay = toNumber(entry.grossPay);
+      const approved = Boolean(entry.approvedAt);
+
+      if (approved) {
+        summary.approvedEntries += 1;
+        summary.approvedGrossPay += grossPay;
+        if (entry.workDate >= cutoffDate) {
+          summary.approvedGrossPayLast7Days += grossPay;
+        }
+      } else {
+        summary.pendingApprovals += 1;
+        summary.pendingHours += hoursWorked;
+        summary.pendingGrossPay += grossPay;
+      }
+
+      return summary;
+    },
+    {
+      pendingApprovals: 0,
+      approvedEntries: 0,
+      pendingHours: 0,
+      pendingGrossPay: 0,
+      approvedGrossPay: 0,
+      approvedGrossPayLast7Days: 0,
+    },
+  );
+}
+
+function daysSinceWorkDate(workDate: string) {
+  const date = new Date(`${workDate}T12:00:00.000Z`);
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  const elapsedMs = Date.now() - date.getTime();
+  return elapsedMs < 0 ? 0 : Math.floor(elapsedMs / (1000 * 60 * 60 * 24));
+}
+
+function buildCrewPayrollRollups(entries: Awaited<ReturnType<typeof buildLaborEntryPayloads>>) {
+  const rollups = entries.reduce(
+    (map, entry) => {
+      if (!entry.crewMember) {
+        return map;
+      }
+
+      const existing = map.get(entry.crewMemberId) ?? {
+        crewMemberId: entry.crewMemberId,
+        crewMemberName: entry.crewMember.fullName,
+        employeeId: entry.crewMember.employeeId,
+        position: entry.crewMember.position,
+        payType: entry.crewMember.payType,
+        active: entry.crewMember.active,
+        h2aWorker: entry.crewMember.h2aWorker,
+        totalEntries: 0,
+        approvedEntries: 0,
+        pendingEntries: 0,
+        totalHours: 0,
+        approvedHours: 0,
+        pendingHours: 0,
+        totalGrossPay: 0,
+        approvedGrossPay: 0,
+        pendingGrossPay: 0,
+        lastWorkDate: null as string | null,
+        lastApprovedAt: null as Date | null,
+      };
+
+      const hoursWorked = toNumber(entry.hoursWorked);
+      const grossPay = toNumber(entry.grossPay);
+      const approved = Boolean(entry.approvedAt);
+
+      existing.totalEntries += 1;
+      existing.totalHours += hoursWorked;
+      existing.totalGrossPay += grossPay;
+
+      if (approved) {
+        existing.approvedEntries += 1;
+        existing.approvedHours += hoursWorked;
+        existing.approvedGrossPay += grossPay;
+        if (!existing.lastApprovedAt || (entry.approvedAt && entry.approvedAt > existing.lastApprovedAt)) {
+          existing.lastApprovedAt = entry.approvedAt;
+        }
+      } else {
+        existing.pendingEntries += 1;
+        existing.pendingHours += hoursWorked;
+        existing.pendingGrossPay += grossPay;
+      }
+
+      if (!existing.lastWorkDate || entry.workDate > existing.lastWorkDate) {
+        existing.lastWorkDate = entry.workDate;
+      }
+
+      map.set(entry.crewMemberId, existing);
+      return map;
+    },
+    new Map<
+      string,
+      {
+        crewMemberId: string;
+        crewMemberName: string;
+        employeeId: string | null;
+        position: string | null;
+        payType: CrewPayType | null;
+        active: boolean | null;
+        h2aWorker: boolean | null;
+        totalEntries: number;
+        approvedEntries: number;
+        pendingEntries: number;
+        totalHours: number;
+        approvedHours: number;
+        pendingHours: number;
+        totalGrossPay: number;
+        approvedGrossPay: number;
+        pendingGrossPay: number;
+        lastWorkDate: string | null;
+        lastApprovedAt: Date | null;
+      }
+    >(),
+  );
+
+  return Array.from(rollups.values())
+    .map((rollup) => ({
+      ...rollup,
+      totalHours: roundNumber(rollup.totalHours, 2),
+      approvedHours: roundNumber(rollup.approvedHours, 2),
+      pendingHours: roundNumber(rollup.pendingHours, 2),
+      totalGrossPay: roundNumber(rollup.totalGrossPay, 2),
+      approvedGrossPay: roundNumber(rollup.approvedGrossPay, 2),
+      pendingGrossPay: roundNumber(rollup.pendingGrossPay, 2),
+      lastApprovedAt: rollup.lastApprovedAt?.toISOString() ?? null,
+    }))
+    .sort((left, right) => {
+      if (right.pendingGrossPay !== left.pendingGrossPay) {
+        return right.pendingGrossPay - left.pendingGrossPay;
+      }
+
+      if (right.totalGrossPay !== left.totalGrossPay) {
+        return right.totalGrossPay - left.totalGrossPay;
+      }
+
+      return left.crewMemberName.localeCompare(right.crewMemberName);
+    });
+}
+
+function buildApprovalQueue(entries: Awaited<ReturnType<typeof buildLaborEntryPayloads>>) {
+  return entries
+    .filter((entry) => !entry.approvedAt)
+    .sort((left, right) => {
+      const dateDiff = left.workDate.localeCompare(right.workDate);
+      if (dateDiff !== 0) {
+        return dateDiff;
+      }
+
+      const leftCreatedAt = left.createdAt?.getTime() ?? 0;
+      const rightCreatedAt = right.createdAt?.getTime() ?? 0;
+      return leftCreatedAt - rightCreatedAt;
+    })
+    .map((entry) => ({
+      laborEntryId: entry.id,
+      crewMemberId: entry.crewMemberId,
+      crewMemberName: entry.crewMember?.fullName ?? 'Crew member',
+      payType: entry.crewMember?.payType ?? null,
+      workDate: entry.workDate,
+      blockName: entry.block?.name ?? null,
+      taskTitle: entry.task?.title ?? null,
+      hoursWorked: roundNumber(toNumber(entry.hoursWorked), 2),
+      grossPay: roundNumber(toNumber(entry.grossPay), 2),
+      pieceRateType: entry.pieceRateType,
+      pieceRateQuantity: entry.pieceRateQuantity,
+      pieceRatePerUnit: entry.pieceRatePerUnit,
+      notes: entry.notes,
+      createdAt: entry.createdAt?.toISOString() ?? null,
+      ageDays: daysSinceWorkDate(entry.workDate),
+    }))
+    .slice(0, 12);
+}
+
 function shouldRecomputeCompensation(body: Record<string, unknown>) {
   return [
     'crewMemberId',
@@ -473,7 +662,7 @@ app.get('/', async (c) => {
       .from(laborEntries)
       .where(eq(laborEntries.orgId, orgId))
       .orderBy(desc(laborEntries.workDate), desc(laborEntries.createdAt))
-      .limit(100),
+      .limit(200),
     db
       .select({
         id: profiles.id,
@@ -513,6 +702,9 @@ app.get('/', async (c) => {
   const crewPayload = await buildCrewMemberPayloads(crewRows);
   const entryPayload = await buildLaborEntryPayloads(entryRows);
   const recentSummary = summarizeRecentLabor(entryPayload);
+  const payrollSummary = summarizePayroll(entryPayload);
+  const crewPayroll = buildCrewPayrollRollups(entryPayload);
+  const approvalQueue = buildApprovalQueue(entryPayload);
 
   return c.json({
     crewMembers: crewPayload,
@@ -520,6 +712,8 @@ app.get('/', async (c) => {
     availableProfiles: profileRows,
     blocks: blockRows,
     tasks: taskRows,
+    crewPayroll,
+    approvalQueue,
     summary: {
       totalCrewMembers: crewPayload.length,
       activeCrewMembers: crewPayload.filter((crewMember) => crewMember.active).length,
@@ -527,6 +721,12 @@ app.get('/', async (c) => {
       laborEntries: entryPayload.length,
       hoursLast7Days: roundNumber(recentSummary.hoursLast7Days, 2),
       grossPayLast7Days: roundNumber(recentSummary.grossPayLast7Days, 2),
+      pendingApprovals: payrollSummary.pendingApprovals,
+      approvedEntries: payrollSummary.approvedEntries,
+      pendingHours: roundNumber(payrollSummary.pendingHours, 2),
+      pendingGrossPay: roundNumber(payrollSummary.pendingGrossPay, 2),
+      approvedGrossPay: roundNumber(payrollSummary.approvedGrossPay, 2),
+      approvedGrossPayLast7Days: roundNumber(payrollSummary.approvedGrossPayLast7Days, 2),
     },
   });
 });
@@ -739,6 +939,20 @@ app.patch('/entries/:id', async (c) => {
       updatedAt: new Date(),
       updatedBy: profileId,
     };
+    const invalidatesApproval = [
+      'crewMemberId',
+      'taskId',
+      'blockId',
+      'workDate',
+      'clockIn',
+      'clockOut',
+      'hoursWorked',
+      'pieceRateType',
+      'pieceRateQuantity',
+      'pieceRatePerUnit',
+      'grossPay',
+      'notes',
+    ].some((field) => field in body);
 
     if (values.crewMemberId !== undefined) updateValues.crewMemberId = values.crewMemberId!;
     if (values.taskId !== undefined) updateValues.taskId = values.taskId ?? null;
@@ -798,6 +1012,11 @@ app.patch('/entries/:id', async (c) => {
       updateValues.grossPay = formatDecimal(grossPayNumber, 2);
     }
 
+    if (invalidatesApproval) {
+      updateValues.approvedBy = null;
+      updateValues.approvedAt = null;
+    }
+
     const [entry] = await db
       .update(laborEntries)
       .set(updateValues)
@@ -813,6 +1032,44 @@ app.patch('/entries/:id', async (c) => {
       message === 'Crew member not found for this organization.' ||
       message === 'Block not found for this organization.' ||
       message === 'Task not found for this organization.'
+        ? 404
+        : 400;
+    return c.json({ error: message }, status);
+  }
+});
+
+app.patch('/entries/:id/approval', async (c) => {
+  const orgId = c.get('orgId');
+  const profileId = c.get('profileId');
+  const id = c.req.param('id');
+
+  try {
+    const body = await c.req.json<Record<string, unknown>>();
+    const approved = normalizeBoolean(body.approved, 'Approved status');
+    await requireLaborEntry(orgId, id);
+
+    if (approved) {
+      await requireOwnedProfile(orgId, profileId);
+    }
+
+    const [entry] = await db
+      .update(laborEntries)
+      .set({
+        approvedBy: approved ? profileId : null,
+        approvedAt: approved ? new Date() : null,
+        updatedAt: new Date(),
+        updatedBy: profileId,
+      })
+      .where(and(eq(laborEntries.id, id), eq(laborEntries.orgId, orgId)))
+      .returning();
+
+    const [payload] = await buildLaborEntryPayloads([entry]);
+    return c.json(payload);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unable to update labor approval.';
+    const status =
+      message === 'Labor entry not found for this organization.' ||
+      message === 'Linked profile not found for this organization.'
         ? 404
         : 400;
     return c.json({ error: message }, status);

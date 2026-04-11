@@ -565,7 +565,7 @@ export const notifications = pgTable('notifications', {
   id: uuid('id').primaryKey().default(sql`uuid_generate_v4()`),
   orgId: uuid('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
   recommendationId: uuid('recommendation_id').references(() => aiRecommendations.id, { onDelete: 'cascade' }),
-  notificationType: text('notification_type', { enum: ['forecast_recommendation'] }).notNull(),
+  notificationType: text('notification_type', { enum: ['forecast_recommendation', 'frost_alert'] }).notNull(),
   titleEn: text('title_en').notNull(),
   titleEs: text('title_es').notNull(),
   bodyEn: text('body_en').notNull(),

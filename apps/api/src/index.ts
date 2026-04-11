@@ -17,6 +17,8 @@ import notificationsRouter from './routes/notifications';
 import laborRouter from './routes/labor';
 import syncRouter from './routes/sync';
 import eventsRouter from './routes/events';
+import degreeDaysRouter from './routes/degreeDays';
+import frostRouter from './routes/frost';
 import stripeWebhookRouter from './routes/webhooks/stripe';
 
 import { Queue, Worker } from 'bullmq';
@@ -61,7 +63,9 @@ app.route('/api/v1/scouting', scoutingRouter);
 app.route('/api/v1/tasks', tasksRouter);
 app.route('/api/v1/labor', laborRouter);
 app.route('/api/v1/intelligence', intelligenceRouter);
+app.route('/api/v1/degree-days', degreeDaysRouter);
 app.route('/api/v1/notifications', notificationsRouter);
+app.route('/api/v1/frost', frostRouter);
 app.route('/api/v1/sync', syncRouter);
 app.route('/api/v1/events', eventsRouter);
 app.route('/api/webhooks/stripe', stripeWebhookRouter);

@@ -1,15 +1,18 @@
 import { Hono } from 'hono';
-import { and, asc, desc, eq, inArray } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray } from 'drizzle-orm';
 import { db } from '@ranchos/db/src';
 import {
   blockIrrigationConfig,
   blocks,
   cimisStations,
   irrigationEvents,
+  etData,
   ranches,
+  weatherForecasts,
 } from '@ranchos/db/src/schema';
 import { orgScopeMiddleware } from '../middleware/auth';
 import { enqueueRecommendationRefresh } from '../lib/refreshRecommendations';
+import { calculateIrrigationRuntime } from '@ranchos/shared/src/utils/irrigation';
 
 const app = new Hono<{ Variables: { orgId: string; profileId: string } }>();
 
@@ -106,6 +109,63 @@ function normalizeInteger(
   }
 
   return parsed;
+}
+
+function toNumber(value: unknown) {
+  if (value === null || value === undefined || value === '') {
+    return null;
+  }
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function addDays(value: string, days: number) {
+  const date = new Date(`${value}T12:00:00`);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  date.setDate(date.getDate() + days);
+  return `${date.getFullYear()}-${`${date.getMonth() + 1}`.padStart(2, '0')}-${`${date.getDate()}`.padStart(2, '0')}`;
+}
+
+function currentDateValue() {
+  const today = new Date();
+  return `${today.getFullYear()}-${`${today.getMonth() + 1}`.padStart(2, '0')}-${`${today.getDate()}`.padStart(2, '0')}`;
+}
+
+function getMonthKc(config: {
+  kcJan?: string | null;
+  kcFeb?: string | null;
+  kcMar?: string | null;
+  kcApr?: string | null;
+  kcMay?: string | null;
+  kcJun?: string | null;
+  kcJul?: string | null;
+  kcAug?: string | null;
+  kcSep?: string | null;
+  kcOct?: string | null;
+  kcNov?: string | null;
+  kcDec?: string | null;
+}, today: Date) {
+  const monthKeys = [
+    'kcJan',
+    'kcFeb',
+    'kcMar',
+    'kcApr',
+    'kcMay',
+    'kcJun',
+    'kcJul',
+    'kcAug',
+    'kcSep',
+    'kcOct',
+    'kcNov',
+    'kcDec',
+  ] as const;
+
+  const currentMonthKey = monthKeys[today.getMonth()];
+  return toNumber(config[currentMonthKey]) ?? 1;
 }
 
 async function requireOwnedRanch(orgId: string, ranchId: string) {
@@ -233,6 +293,8 @@ app.get('/', async (c) => {
 
     const blockIds = blockRows.map((block) => block.id);
 
+    const today = new Date();
+    const todayValue = currentDateValue();
     const [configRows, eventRows, stationRows] = await Promise.all([
       blockIds.length === 0
         ? Promise.resolve([])
@@ -247,6 +309,18 @@ app.get('/', async (c) => {
               treeSpacingFt: blockIrrigationConfig.treeSpacingFt,
               rowSpacingFt: blockIrrigationConfig.rowSpacingFt,
               deficitTriggerInches: blockIrrigationConfig.deficitTriggerInches,
+              kcJan: blockIrrigationConfig.kcJan,
+              kcFeb: blockIrrigationConfig.kcFeb,
+              kcMar: blockIrrigationConfig.kcMar,
+              kcApr: blockIrrigationConfig.kcApr,
+              kcMay: blockIrrigationConfig.kcMay,
+              kcJun: blockIrrigationConfig.kcJun,
+              kcJul: blockIrrigationConfig.kcJul,
+              kcAug: blockIrrigationConfig.kcAug,
+              kcSep: blockIrrigationConfig.kcSep,
+              kcOct: blockIrrigationConfig.kcOct,
+              kcNov: blockIrrigationConfig.kcNov,
+              kcDec: blockIrrigationConfig.kcDec,
               updatedAt: blockIrrigationConfig.updatedAt,
             })
             .from(blockIrrigationConfig)
@@ -292,6 +366,81 @@ app.get('/', async (c) => {
 
     const configsByBlockId = new Map(configRows.map((config) => [config.blockId, config]));
     const stationById = new Map(stationRows.map((station) => [station.id, station]));
+    const stationIds = Array.from(
+      new Set(
+        configRows
+          .map((config) => config.cimisStationId)
+          .filter((stationId): stationId is number => Number.isInteger(stationId)),
+      ),
+    );
+
+    const [etRows, forecastRows] = await Promise.all([
+      stationIds.length === 0
+        ? Promise.resolve([])
+        : db
+            .select({
+              stationId: etData.stationId,
+              date: etData.date,
+              etoInches: etData.etoInches,
+              maxTempF: etData.maxTempF,
+              minTempF: etData.minTempF,
+            })
+            .from(etData)
+            .where(and(inArray(etData.stationId, stationIds), gte(etData.date, addDays(todayValue, -21))))
+            .orderBy(desc(etData.date)),
+      stationIds.length === 0
+        ? Promise.resolve([])
+        : db
+            .select({
+              stationId: weatherForecasts.stationId,
+              forecastDate: weatherForecasts.forecastDate,
+              etoInches: weatherForecasts.etoInches,
+              maxTempF: weatherForecasts.maxTempF,
+              minTempF: weatherForecasts.minTempF,
+              precipitationProbabilityPct: weatherForecasts.precipitationProbabilityPct,
+            })
+            .from(weatherForecasts)
+            .where(and(inArray(weatherForecasts.stationId, stationIds), gte(weatherForecasts.forecastDate, todayValue)))
+            .orderBy(asc(weatherForecasts.forecastDate)),
+    ]);
+
+    const etRowsByStation = new Map<number, typeof etRows>();
+    for (const row of etRows) {
+      const stationRowsForId = etRowsByStation.get(row.stationId) ?? [];
+      stationRowsForId.push(row);
+      etRowsByStation.set(row.stationId, stationRowsForId);
+    }
+
+    const forecastRowsByStation = new Map<number, typeof forecastRows>();
+    for (const row of forecastRows) {
+      const stationRowsForId = forecastRowsByStation.get(row.stationId) ?? [];
+      stationRowsForId.push(row);
+      forecastRowsByStation.set(row.stationId, stationRowsForId);
+    }
+
+    const completedEventsByBlockId = new Map<string, (typeof eventRows)[number]>();
+    for (const event of eventRows) {
+      if (event.status !== 'completed') {
+        continue;
+      }
+
+      const current = completedEventsByBlockId.get(event.blockId);
+      if (!current || event.scheduledDate > current.scheduledDate) {
+        completedEventsByBlockId.set(event.blockId, event);
+      }
+    }
+
+    const upcomingEventsByBlockId = new Map<string, (typeof eventRows)[number]>();
+    for (const event of eventRows) {
+      if (event.scheduledDate < todayValue || (event.status !== 'scheduled' && event.status !== 'running')) {
+        continue;
+      }
+
+      const current = upcomingEventsByBlockId.get(event.blockId);
+      if (!current || event.scheduledDate < current.scheduledDate) {
+        upcomingEventsByBlockId.set(event.blockId, event);
+      }
+    }
 
     const blocksWithConfig = blockRows.map((block) => {
       const config = configsByBlockId.get(block.id) ?? null;
@@ -306,10 +455,182 @@ app.get('/', async (c) => {
       };
     });
 
+    const blockInsights = blocksWithConfig.map((block) => {
+      const config = configsByBlockId.get(block.id) ?? null;
+      const stationId = config?.cimisStationId ?? null;
+      const latestEt = stationId
+        ? (etRowsByStation.get(stationId) ?? [])
+            .slice()
+            .sort((left, right) => right.date.localeCompare(left.date))[0] ?? null
+        : null;
+      const forecastWindow = stationId
+        ? (forecastRowsByStation.get(stationId) ?? [])
+            .filter((forecastRow) => forecastRow.forecastDate >= todayValue)
+            .slice(0, 3)
+        : [];
+      const baselineDate = completedEventsByBlockId.get(block.id)?.scheduledDate ?? addDays(todayValue, -7);
+      const kc = config ? getMonthKc(config, today) : 1;
+      const currentEtDeficitInches = stationId
+        ? (etRowsByStation.get(stationId) ?? [])
+            .filter((etRow) => etRow.date >= baselineDate)
+            .reduce((sum, etRow) => sum + (toNumber(etRow.etoInches) ?? 0) * kc, 0)
+        : null;
+      const trigger = toNumber(config?.deficitTriggerInches) ?? 1.5;
+      const forecastEtInches = forecastWindow.reduce((sum, forecastRow) => sum + (toNumber(forecastRow.etoInches) ?? 0) * kc, 0);
+      const projectedEtDeficitInches =
+        currentEtDeficitInches === null ? null : currentEtDeficitInches + forecastEtInches;
+      const hottestForecast = forecastWindow
+        .slice()
+        .sort((left, right) => (toNumber(right.maxTempF) ?? 0) - (toNumber(left.maxTempF) ?? 0))[0] ?? null;
+      let triggerCrossingDate: string | null = null;
+
+      if (currentEtDeficitInches !== null && forecastWindow.length > 0) {
+        let projected = currentEtDeficitInches;
+        for (const forecastRow of forecastWindow) {
+          projected += (toNumber(forecastRow.etoInches) ?? 0) * kc;
+          if (projected >= trigger) {
+            triggerCrossingDate = forecastRow.forecastDate;
+            break;
+          }
+        }
+      }
+
+      const canEstimateRuntime =
+        currentEtDeficitInches !== null &&
+        (toNumber(config?.emitterFlowGph) ?? 0) > 0 &&
+        (toNumber(config?.emittersPerTree) ?? 0) > 0 &&
+        (toNumber(config?.treeSpacingFt) ?? 0) > 0 &&
+        (toNumber(config?.rowSpacingFt) ?? 0) > 0;
+      const runtimeEstimate = canEstimateRuntime
+        ? calculateIrrigationRuntime({
+            etDeficitInches: currentEtDeficitInches!,
+            emitterFlowGph: toNumber(config?.emitterFlowGph)!,
+            emittersPerTree: toNumber(config?.emittersPerTree)!,
+            treeSpacingFt: toNumber(config?.treeSpacingFt)!,
+            rowSpacingFt: toNumber(config?.rowSpacingFt)!,
+          })
+        : null;
+
+      let pressureStatus:
+        | 'unconfigured'
+        | 'missing_station'
+        | 'missing_et'
+        | 'stale_et'
+        | 'under_trigger'
+        | 'forecast_crossing'
+        | 'near_trigger'
+        | 'over_trigger' = 'unconfigured';
+
+      if (!config) {
+        pressureStatus = 'unconfigured';
+      } else if (!stationId) {
+        pressureStatus = 'missing_station';
+      } else if (!latestEt) {
+        pressureStatus = 'missing_et';
+      } else if (latestEt.date < addDays(todayValue, -3)) {
+        pressureStatus = 'stale_et';
+      } else if ((currentEtDeficitInches ?? 0) >= trigger) {
+        pressureStatus = 'over_trigger';
+      } else if (triggerCrossingDate) {
+        pressureStatus = 'forecast_crossing';
+      } else if ((currentEtDeficitInches ?? 0) >= trigger * 0.8) {
+        pressureStatus = 'near_trigger';
+      } else {
+        pressureStatus = 'under_trigger';
+      }
+
+      return {
+        blockId: block.id,
+        latestEtDate: latestEt?.date ?? null,
+        latestEtInches: latestEt ? toNumber(latestEt.etoInches) : null,
+        baselineDate,
+        currentEtDeficitInches: currentEtDeficitInches === null ? null : Number(currentEtDeficitInches.toFixed(4)),
+        deficitTriggerInches: trigger,
+        kc,
+        forecastEtInches: Number(forecastEtInches.toFixed(4)),
+        projectedEtDeficitInches:
+          projectedEtDeficitInches === null ? null : Number(projectedEtDeficitInches.toFixed(4)),
+        triggerCrossingDate,
+        hottestForecastDate: hottestForecast?.forecastDate ?? null,
+        hottestForecastTempF: hottestForecast ? toNumber(hottestForecast.maxTempF) : null,
+        rainChanceMaxPct: forecastWindow.reduce((max, row) => Math.max(max, toNumber(row.precipitationProbabilityPct) ?? 0), 0),
+        upcomingEvent: upcomingEventsByBlockId.get(block.id)
+          ? {
+              id: upcomingEventsByBlockId.get(block.id)!.id,
+              scheduledDate: upcomingEventsByBlockId.get(block.id)!.scheduledDate,
+              status: upcomingEventsByBlockId.get(block.id)!.status,
+              plannedRuntimeHours: upcomingEventsByBlockId.get(block.id)!.plannedRuntimeHours,
+            }
+          : null,
+        runtimeRecommendation: runtimeEstimate
+          ? {
+              recommendedRuntimeHours: runtimeEstimate.recommendedRuntimeHours,
+              appRateInchesPerHour: Number(runtimeEstimate.appRateInchesPerHour.toFixed(4)),
+              grossWaterNeededInches: Number(runtimeEstimate.grossWaterNeededInches.toFixed(4)),
+              estimatedGallonsPerAcre: Math.round(runtimeEstimate.estimatedGallonsPerAcre),
+            }
+          : null,
+        forecastWindow: forecastWindow.map((row) => ({
+          forecastDate: row.forecastDate,
+          etoInches: toNumber(row.etoInches),
+          maxTempF: toNumber(row.maxTempF),
+          minTempF: toNumber(row.minTempF),
+          precipitationProbabilityPct: toNumber(row.precipitationProbabilityPct),
+        })),
+        pressureStatus,
+      };
+    });
+
+    const stationSnapshots = stationRows
+      .map((station) => {
+        const latestEt = (etRowsByStation.get(station.id) ?? [])
+          .slice()
+          .sort((left, right) => right.date.localeCompare(left.date))[0] ?? null;
+        const nextForecastRows = (forecastRowsByStation.get(station.id) ?? [])
+          .filter((forecastRow) => forecastRow.forecastDate >= todayValue)
+          .slice(0, 3);
+
+        return {
+          stationId: station.id,
+          stationName: station.name,
+          county: station.county,
+          latestEtDate: latestEt?.date ?? null,
+          latestEtInches: latestEt ? toNumber(latestEt.etoInches) : null,
+          threeDayForecastEtInches: Number(
+            nextForecastRows.reduce((sum, row) => sum + (toNumber(row.etoInches) ?? 0), 0).toFixed(4),
+          ),
+          hottestForecastTempF: nextForecastRows.reduce(
+            (max, row) => Math.max(max, toNumber(row.maxTempF) ?? Number.NEGATIVE_INFINITY),
+            Number.NEGATIVE_INFINITY,
+          ),
+          linkedBlockCount: blocksWithConfig.filter((block) => block.config?.cimisStationId === station.id).length,
+        };
+      })
+      .filter((station) => station.linkedBlockCount > 0)
+      .map((station) => ({
+        ...station,
+        hottestForecastTempF:
+          station.hottestForecastTempF === Number.NEGATIVE_INFINITY ? null : station.hottestForecastTempF,
+      }));
+
+    const summary = {
+      configuredBlocks: blocksWithConfig.filter((block) => Boolean(block.config)).length,
+      blocksOverTrigger: blockInsights.filter((insight) => insight.pressureStatus === 'over_trigger').length,
+      forecastCrossings: blockInsights.filter((insight) => insight.pressureStatus === 'forecast_crossing').length,
+      staleStations: blockInsights.filter((insight) => insight.pressureStatus === 'stale_et').length,
+      missingDataBlocks: blockInsights.filter((insight) =>
+        insight.pressureStatus === 'unconfigured'
+        || insight.pressureStatus === 'missing_station'
+        || insight.pressureStatus === 'missing_et').length,
+    };
+
     return c.json({
       blocks: blocksWithConfig,
       stations: stationRows,
       events: eventRows,
+      blockInsights,
+      stationSnapshots,
+      summary,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unable to load irrigation data.';

@@ -20,6 +20,13 @@ type PestSpeciesInsert = typeof pestSpecies.$inferInsert;
 type ScoutingRating = Exclude<NonNullable<ScoutingLogInsert['rating']>, undefined>;
 
 const ratingOptions: ScoutingRating[] = ['none', 'low', 'moderate', 'high', 'action'];
+const ratingSeverity: Record<ScoutingRating, number> = {
+  none: 0,
+  low: 1,
+  moderate: 2,
+  high: 3,
+  action: 4,
+};
 
 const defaultPestSpecies: Pick<
   PestSpeciesInsert,
@@ -344,6 +351,16 @@ async function buildScoutingPayloads(logRows: (typeof scoutingLogs.$inferSelect)
   });
 }
 
+function addDays(value: Date, days: number) {
+  const next = new Date(value);
+  next.setDate(next.getDate() + days);
+  return next;
+}
+
+function scoreRating(value: ScoutingRating | null | undefined) {
+  return value ? ratingSeverity[value] : -1;
+}
+
 app.get('/', async (c) => {
   const orgId = c.get('orgId');
   const ranchId = c.req.query('ranch_id');
@@ -399,10 +416,156 @@ app.get('/', async (c) => {
             .where(and(eq(scoutingLogs.orgId, orgId), inArray(scoutingLogs.blockId, blockIds)))
             .orderBy(desc(scoutingLogs.scoutedAt), desc(scoutingLogs.createdAt));
 
+    const logs = await buildScoutingPayloads(logRows);
+    const now = new Date();
+    const recentCutoff = addDays(now, -14);
+    const staleCutoff = addDays(now, -10);
+
+    const blockInsights = blockRows.map((block) => {
+      const blockLogs = logs
+        .filter((log) => log.blockId === block.id)
+        .sort((left, right) => new Date(right.scoutedAt).getTime() - new Date(left.scoutedAt).getTime());
+      const recentLogs = blockLogs.filter((log) => new Date(log.scoutedAt) >= recentCutoff);
+      const followUpLogs = recentLogs.filter((log) => log.rating === 'action' || log.rating === 'high');
+      const latestLog = blockLogs[0] ?? null;
+      const topPests = Array.from(
+        blockLogs.reduce((map, log) => {
+          const current = map.get(log.pestDisplayName) ?? 0;
+          map.set(log.pestDisplayName, current + 1);
+          return map;
+        }, new Map<string, number>()),
+      )
+        .sort((left, right) => right[1] - left[1])
+        .slice(0, 3)
+        .map(([label, count]) => ({ label, count }));
+      const highestRecentRating = recentLogs.reduce<ScoutingRating | null>((highest, log) => {
+        return scoreRating(log.rating) > scoreRating(highest) ? (log.rating ?? null) : highest;
+      }, null);
+      const lastScoutedAt = latestLog?.scoutedAt ?? null;
+      const needsFreshScout = !lastScoutedAt || new Date(lastScoutedAt) < staleCutoff;
+
+      return {
+        blockId: block.id,
+        blockName: block.name,
+        cropType: block.cropType,
+        variety: block.variety,
+        isOrganic: block.isOrganic,
+        totalLogs: blockLogs.length,
+        recentLogs: recentLogs.length,
+        recentHighOrActionLogs: followUpLogs.length,
+        latestScoutedAt: lastScoutedAt,
+        latestPestName: latestLog?.pestDisplayName ?? null,
+        latestRating: latestLog?.rating ?? null,
+        highestRecentRating,
+        needsFollowUp: followUpLogs.length > 0,
+        needsFreshScout,
+        topPests,
+      };
+    });
+
+    const pestSummaryMap = logs.reduce((map, log) => {
+        const key = log.pestSpeciesId ?? `custom:${log.pestDisplayName}`;
+        const current = map.get(key) ?? {
+          key,
+          label: log.pestDisplayName,
+          speciesId: log.pestSpeciesId ?? null,
+          category: log.pestSpecies?.category ?? null,
+          totalLogs: 0,
+          recentLogs: 0,
+          actionCount: 0,
+          highCount: 0,
+          latestScoutedAt: log.scoutedAt,
+          latestRating: log.rating ?? null,
+          affectedBlockIds: new Set<string>(),
+        };
+
+        current.totalLogs += 1;
+        if (new Date(log.scoutedAt) >= recentCutoff) {
+          current.recentLogs += 1;
+        }
+        if (log.rating === 'action') {
+          current.actionCount += 1;
+        }
+        if (log.rating === 'high') {
+          current.highCount += 1;
+        }
+        if (new Date(log.scoutedAt) > new Date(current.latestScoutedAt)) {
+          current.latestScoutedAt = log.scoutedAt;
+          current.latestRating = log.rating ?? null;
+        }
+        current.affectedBlockIds.add(log.blockId);
+        map.set(key, current);
+        return map;
+      }, new Map<string, {
+        key: string;
+        label: string;
+        speciesId: string | null;
+        category: string | null;
+        totalLogs: number;
+        recentLogs: number;
+        actionCount: number;
+        highCount: number;
+        latestScoutedAt: Date;
+        latestRating: ScoutingRating | null;
+        affectedBlockIds: Set<string>;
+      }>());
+
+    const pestSummaries = Array.from(pestSummaryMap.values())
+      .map((entry) => ({
+        key: entry.key,
+        label: entry.label,
+        speciesId: entry.speciesId,
+        category: entry.category,
+        totalLogs: entry.totalLogs,
+        recentLogs: entry.recentLogs,
+        actionCount: entry.actionCount,
+        highCount: entry.highCount,
+        latestScoutedAt: entry.latestScoutedAt.toISOString(),
+        latestRating: entry.latestRating,
+        affectedBlocks: entry.affectedBlockIds.size,
+      }))
+      .sort((left, right) => {
+        const pressureDiff = (right.actionCount + right.highCount) - (left.actionCount + left.highCount);
+        if (pressureDiff !== 0) {
+          return pressureDiff;
+        }
+        return right.recentLogs - left.recentLogs;
+      });
+
+    const followUpQueue = logs
+      .filter((log) => log.rating === 'action' || log.rating === 'high')
+      .sort((left, right) => new Date(right.scoutedAt).getTime() - new Date(left.scoutedAt).getTime())
+      .slice(0, 8)
+      .map((log) => ({
+        logId: log.id,
+        blockId: log.blockId,
+        blockName: log.block?.name ?? 'Block',
+        pestDisplayName: log.pestDisplayName,
+        rating: log.rating,
+        scoutedAt: log.scoutedAt,
+        scoutedByName: log.scoutedByProfile?.fullName ?? null,
+        observationNotes: log.observationNotes,
+        countPerSample: log.countPerSample,
+        sampleCount: log.sampleCount,
+      }));
+
+    const summary = {
+      totalLogs: logs.length,
+      actionRequired: logs.filter((log) => log.rating === 'action').length,
+      highPressure: logs.filter((log) => log.rating === 'high').length,
+      thisWeek: logs.filter((log) => new Date(log.scoutedAt) >= addDays(now, -7)).length,
+      blocksNeedingFollowUp: blockInsights.filter((block) => block.needsFollowUp).length,
+      staleBlocks: blockInsights.filter((block) => block.needsFreshScout).length,
+    };
+
     return c.json({
       blocks: blockRows,
       species: speciesRows,
-      logs: await buildScoutingPayloads(logRows),
+      logs,
+      blockInsights,
+      pestSummaries,
+      followUpQueue,
+      summary,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unable to load scouting data.';

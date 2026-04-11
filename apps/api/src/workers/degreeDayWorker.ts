@@ -4,23 +4,7 @@ import { eq, and, desc } from 'drizzle-orm';
 import { refreshEnvironmentalRecommendations } from '../lib/environmentalRecommendations';
 import { publishNotificationSnapshot, syncForecastNotifications } from '../lib/notifications';
 import { publishIntelligenceUpdated } from '../lib/orgEvents';
-
-const PEST_MODELS = {
-  NOW: {
-    name: 'Navel Orangeworm',
-    lowerThresholdF: 55, upperThresholdF: 94,
-    biofix_month: 3,           
-    action_threshold_dd: 1350, 
-    applicable_crops: ['almond','navel_orange','valencia_orange']
-  },
-  PTB: {
-    name: 'Peach Twig Borer',
-    lowerThresholdF: 50, upperThresholdF: 88,
-    biofix_month: 2,           
-    action_threshold_dd: 260,
-    applicable_crops: ['almond']
-  }
-};
+import { DEGREE_DAY_MODELS as PEST_MODELS } from '../lib/degreeDayModels';
 
 export async function degreeDayJob() {
   const stations = await db.select().from(cimisStations).where(eq(cimisStations.isActive, true));
@@ -46,7 +30,7 @@ export async function degreeDayJob() {
         .orderBy(desc(degreeDayRecords.date)).limit(1);
 
       const currentMonth = new Date().getMonth() + 1;
-      const isBelowBiofix = currentMonth < model.biofix_month;
+      const isBelowBiofix = currentMonth < model.biofixMonth;
       const cumulativeDD = isBelowBiofix ? 0 : ((parseFloat(lastRecord?.cumulativeDd?.toString() || '0')) + dailyDD);
 
       await db.insert(degreeDayRecords).values({
