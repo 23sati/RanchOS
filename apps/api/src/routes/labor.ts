@@ -1,15 +1,23 @@
 import { Hono } from 'hono';
-import { and, asc, desc, eq, inArray, ne } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, isNotNull, lte, ne } from 'drizzle-orm';
 import { db } from '@ranchos/db/src';
 import {
   blocks,
   crewMembers,
   laborEntries,
   profiles,
+  ranches,
+  taskBlocks,
   tasks,
 } from '@ranchos/db/src/schema';
 import { orgScopeMiddleware } from '../middleware/auth';
-import { calculateGrossPay, calculateHoursWorked } from '../utils/payrollExport';
+import {
+  buildPayrollPeriodCsv,
+  buildPayrollPeriodSummary,
+  buildPayrollPeriodWorkbook,
+  calculateGrossPay,
+  calculateHoursWorked,
+} from '../utils/payrollExport';
 
 const app = new Hono<{ Variables: { orgId: string; profileId: string } }>();
 
@@ -392,11 +400,13 @@ async function buildLaborEntryPayloads(entryRows: (typeof laborEntries.$inferSel
             id: blocks.id,
             name: blocks.name,
             ranchId: blocks.ranchId,
+            ranchName: ranches.name,
             cropType: blocks.cropType,
             variety: blocks.variety,
             acreage: blocks.acreage,
           })
           .from(blocks)
+          .innerJoin(ranches, eq(blocks.ranchId, ranches.id))
           .where(inArray(blocks.id, blockIds)),
     taskIds.length === 0
       ? Promise.resolve([])
@@ -635,6 +645,60 @@ function buildApprovalQueue(entries: Awaited<ReturnType<typeof buildLaborEntryPa
     .slice(0, 12);
 }
 
+function normalizeDateRangeQuery(value: string | undefined, fallback: string | null, fieldName: string) {
+  const normalized = normalizeDate(value, fieldName);
+  return normalized ?? fallback;
+}
+
+function buildDefaultPayPeriodRange() {
+  const endDate = new Date();
+  const startDate = new Date(endDate);
+  startDate.setDate(startDate.getDate() - 13);
+
+  return {
+    startDate: startDate.toISOString().slice(0, 10),
+    endDate: endDate.toISOString().slice(0, 10),
+  };
+}
+
+function buildApprovedPayrollExportEntries(entries: Awaited<ReturnType<typeof buildLaborEntryPayloads>>) {
+  return entries
+    .filter((entry) => entry.approvedAt && entry.crewMember)
+    .map((entry) => ({
+      crewMemberId: entry.crewMemberId,
+      crewMemberName: entry.crewMember!.fullName,
+      employeeId: entry.crewMember!.employeeId,
+      position: entry.crewMember!.position,
+      payType: entry.crewMember!.payType,
+      h2aWorker: entry.crewMember!.h2aWorker,
+      ranchId: entry.block?.ranchId ?? null,
+      ranchName: entry.block?.ranchName ?? null,
+      workDate: entry.workDate,
+      hoursWorked: roundNumber(toNumber(entry.hoursWorked), 2),
+      grossPay: roundNumber(toNumber(entry.grossPay), 2),
+      approvedAt: entry.approvedAt?.toISOString() ?? null,
+    }));
+}
+
+async function buildApprovedPayrollPeriodSummary(orgId: string, startDate: string, endDate: string) {
+  const entryRows = await db
+    .select()
+    .from(laborEntries)
+    .where(
+      and(
+        eq(laborEntries.orgId, orgId),
+        isNotNull(laborEntries.approvedAt),
+        gte(laborEntries.workDate, startDate),
+        lte(laborEntries.workDate, endDate),
+      ),
+    )
+    .orderBy(desc(laborEntries.workDate), desc(laborEntries.approvedAt), desc(laborEntries.createdAt));
+
+  const entryPayload = await buildLaborEntryPayloads(entryRows);
+  const approvedEntries = buildApprovedPayrollExportEntries(entryPayload);
+  return buildPayrollPeriodSummary(startDate, endDate, approvedEntries);
+}
+
 function shouldRecomputeCompensation(body: Record<string, unknown>) {
   return [
     'crewMemberId',
@@ -701,6 +765,29 @@ app.get('/', async (c) => {
 
   const crewPayload = await buildCrewMemberPayloads(crewRows);
   const entryPayload = await buildLaborEntryPayloads(entryRows);
+  const taskScopeRows =
+    taskRows.length === 0
+      ? []
+      : await db
+          .select({
+            taskId: taskBlocks.taskId,
+            ranchId: blocks.ranchId,
+          })
+          .from(taskBlocks)
+          .innerJoin(blocks, eq(taskBlocks.blockId, blocks.id))
+          .where(inArray(taskBlocks.taskId, taskRows.map((task) => task.id)));
+  const ranchIdsByTaskId = new Map<string, Set<string>>();
+
+  for (const taskScopeRow of taskScopeRows) {
+    const existing = ranchIdsByTaskId.get(taskScopeRow.taskId) ?? new Set<string>();
+    existing.add(taskScopeRow.ranchId);
+    ranchIdsByTaskId.set(taskScopeRow.taskId, existing);
+  }
+
+  const taskPayload = taskRows.map((task) => ({
+    ...task,
+    ranchIds: Array.from(ranchIdsByTaskId.get(task.id) ?? []),
+  }));
   const recentSummary = summarizeRecentLabor(entryPayload);
   const payrollSummary = summarizePayroll(entryPayload);
   const crewPayroll = buildCrewPayrollRollups(entryPayload);
@@ -711,7 +798,7 @@ app.get('/', async (c) => {
     laborEntries: entryPayload,
     availableProfiles: profileRows,
     blocks: blockRows,
-    tasks: taskRows,
+    tasks: taskPayload,
     crewPayroll,
     approvalQueue,
     summary: {
@@ -729,6 +816,90 @@ app.get('/', async (c) => {
       approvedGrossPayLast7Days: roundNumber(payrollSummary.approvedGrossPayLast7Days, 2),
     },
   });
+});
+
+app.get('/payroll-period', async (c) => {
+  const orgId = c.get('orgId');
+  const defaults = buildDefaultPayPeriodRange();
+
+  try {
+    const startDate = normalizeDateRangeQuery(c.req.query('startDate'), defaults.startDate, 'Start date');
+    const endDate = normalizeDateRangeQuery(c.req.query('endDate'), defaults.endDate, 'End date');
+
+    if (!startDate || !endDate) {
+      throw new Error('Start date and end date are required.');
+    }
+
+    if (startDate > endDate) {
+      throw new Error('Start date must be on or before end date.');
+    }
+
+    const summary = await buildApprovedPayrollPeriodSummary(orgId, startDate, endDate);
+
+    return c.json(summary);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unable to load payroll export review.';
+    return c.json({ error: message }, 400);
+  }
+});
+
+app.get('/payroll-period/export.csv', async (c) => {
+  const orgId = c.get('orgId');
+  const defaults = buildDefaultPayPeriodRange();
+
+  try {
+    const startDate = normalizeDateRangeQuery(c.req.query('startDate'), defaults.startDate, 'Start date');
+    const endDate = normalizeDateRangeQuery(c.req.query('endDate'), defaults.endDate, 'End date');
+
+    if (!startDate || !endDate) {
+      throw new Error('Start date and end date are required.');
+    }
+
+    if (startDate > endDate) {
+      throw new Error('Start date must be on or before end date.');
+    }
+
+    const summary = await buildApprovedPayrollPeriodSummary(orgId, startDate, endDate);
+    const csv = buildPayrollPeriodCsv(summary);
+
+    c.header('content-type', 'text/csv; charset=utf-8');
+    c.header('content-disposition', `attachment; filename=\"labor-payroll-${startDate}-to-${endDate}.csv\"`);
+    return c.body(csv);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unable to export payroll CSV.';
+    return c.json({ error: message }, 400);
+  }
+});
+
+app.get('/payroll-period/export.xlsx', async (c) => {
+  const orgId = c.get('orgId');
+  const defaults = buildDefaultPayPeriodRange();
+
+  try {
+    const startDate = normalizeDateRangeQuery(c.req.query('startDate'), defaults.startDate, 'Start date');
+    const endDate = normalizeDateRangeQuery(c.req.query('endDate'), defaults.endDate, 'End date');
+
+    if (!startDate || !endDate) {
+      throw new Error('Start date and end date are required.');
+    }
+
+    if (startDate > endDate) {
+      throw new Error('Start date must be on or before end date.');
+    }
+
+    const summary = await buildApprovedPayrollPeriodSummary(orgId, startDate, endDate);
+    const workbook = await buildPayrollPeriodWorkbook(summary);
+
+    c.header(
+      'content-type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+    c.header('content-disposition', `attachment; filename=\"labor-payroll-${startDate}-to-${endDate}.xlsx\"`);
+    return c.body(workbook);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unable to export payroll workbook.';
+    return c.json({ error: message }, 400);
+  }
 });
 
 app.post('/crew-members', async (c) => {

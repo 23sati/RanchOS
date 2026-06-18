@@ -310,6 +310,50 @@ async function buildTaskPayloads(orgId: string, taskRows: (typeof tasks.$inferSe
   }));
 }
 
+function filterTasksByRanch<
+  T extends {
+    blocks: Array<{
+      ranchId: string;
+    }>;
+  },
+>(taskRows: T[], ranchId: string) {
+  return taskRows.filter((task) => task.blocks.some((block) => block.ranchId === ranchId));
+}
+
+function summarizeTasks(
+  taskRows: Array<
+    Pick<Awaited<ReturnType<typeof buildTaskPayloads>>[number], 'status' | 'dueDate' | 'effectiveStatus'>
+  >,
+  today: string,
+) {
+  const summary = {
+    open: 0,
+    inProgress: 0,
+    overdue: 0,
+    dueToday: 0,
+    completed: 0,
+    total: taskRows.length,
+  };
+
+  for (const task of taskRows) {
+    if (task.effectiveStatus === 'pending') {
+      summary.open += 1;
+    } else if (task.effectiveStatus === 'in_progress') {
+      summary.inProgress += 1;
+    } else if (task.effectiveStatus === 'overdue') {
+      summary.overdue += 1;
+    } else if (task.effectiveStatus === 'completed') {
+      summary.completed += 1;
+    }
+
+    if (task.status !== 'completed' && task.dueDate === today) {
+      summary.dueToday += 1;
+    }
+  }
+
+  return summary;
+}
+
 async function getTaskById(orgId: string, taskId: string) {
   const task = await db.query.tasks.findFirst({
     where: and(eq(tasks.id, taskId), eq(tasks.orgId, orgId)),
@@ -349,42 +393,18 @@ app.get('/task-types', async (c) => {
 
 app.get('/summary', async (c) => {
   const orgId = c.get('orgId');
+  const ranchId = normalizeText(c.req.query('ranchId'));
   const today = getTodayInTimeZone(await getOrgTimezone(orgId));
 
   const taskRows = await db
-    .select({
-      id: tasks.id,
-      status: tasks.status,
-      dueDate: tasks.dueDate,
-    })
+    .select()
     .from(tasks)
-    .where(eq(tasks.orgId, orgId));
+    .where(eq(tasks.orgId, orgId))
+    .orderBy(asc(tasks.dueDate), desc(tasks.createdAt));
 
-  const summary = {
-    open: 0,
-    inProgress: 0,
-    overdue: 0,
-    dueToday: 0,
-    completed: 0,
-    total: taskRows.length,
-  };
-
-  for (const task of taskRows) {
-    const effectiveStatus = resolveEffectiveStatus(task, today);
-    if (effectiveStatus === 'pending') {
-      summary.open += 1;
-    } else if (effectiveStatus === 'in_progress') {
-      summary.inProgress += 1;
-    } else if (effectiveStatus === 'overdue') {
-      summary.overdue += 1;
-    } else if (effectiveStatus === 'completed') {
-      summary.completed += 1;
-    }
-
-    if (task.status !== 'completed' && task.dueDate === today) {
-      summary.dueToday += 1;
-    }
-  }
+  const payload = await buildTaskPayloads(orgId, taskRows);
+  const filtered = ranchId ? filterTasksByRanch(payload, ranchId) : payload;
+  const summary = summarizeTasks(filtered, today);
 
   return c.json(summary);
 });
@@ -392,6 +412,7 @@ app.get('/summary', async (c) => {
 app.get('/', async (c) => {
   const orgId = c.get('orgId');
   const statusFilter = c.req.query('status') as TaskStatus | undefined;
+  const ranchId = normalizeText(c.req.query('ranchId'));
 
   await ensureDefaultTaskTypes();
 
@@ -402,7 +423,8 @@ app.get('/', async (c) => {
     .orderBy(asc(tasks.dueDate), desc(tasks.createdAt));
 
   const payload = await buildTaskPayloads(orgId, taskRows);
-  const filtered = statusFilter ? payload.filter((task) => task.effectiveStatus === statusFilter) : payload;
+  const scoped = ranchId ? filterTasksByRanch(payload, ranchId) : payload;
+  const filtered = statusFilter ? scoped.filter((task) => task.effectiveStatus === statusFilter) : scoped;
 
   return c.json(filtered);
 });

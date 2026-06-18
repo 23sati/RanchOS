@@ -1,5 +1,9 @@
 # RanchOS Current State
 
+Superseded on 2026-04-10 by `CURRENT_STATE_2026-04-10.md`.
+
+Use the newer file first for future threads.
+
 Last updated: 2026-04-09
 Workspace: `C:\Users\sati1\Desktop\RanchOS`
 

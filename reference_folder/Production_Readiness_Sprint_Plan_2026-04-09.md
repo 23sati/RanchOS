@@ -1,6 +1,6 @@
 # RanchOS Production Readiness Sprint Plan
 
-Last updated: 2026-04-09
+Last updated: 2026-04-11
 Workspace: `C:\Users\sati1\Desktop\RanchOS`
 
 This document turns the current RanchOS state into a practical production-readiness plan.
@@ -112,10 +112,8 @@ These are not always hard blockers, but they should be completed if the team wan
 
 ### Product Depth
 
-- build the degree-day dashboard page
-- improve irrigation dashboard depth
-- improve scouting dashboard depth
-- improve multi-ranch views if multi-ranch use is expected early
+- tighten the remaining multi-ranch admin/export semantics beyond the current page-level scope switching if portfolio use is expected early
+- tighten remaining setup guidance and operational empty states on launch workflows
 
 ### UX Polish
 
@@ -132,7 +130,7 @@ These are not always hard blockers, but they should be completed if the team wan
 
 ### Platform Hardening
 
-- add SSE fallback and scaling hardening
+- deepen worker/live-update stress hardening beyond the current SSE fallback path
 - review query performance and materialized-view needs
 - add staging data and QA scripts for repeated validation
 
@@ -301,14 +299,14 @@ Goal:
 
 Focus:
 
-- degree-day dashboard
-- targeted irrigation/scouting/intelligence polish
+- payroll/export depth
+- targeted workflow polish on the completed degree-day, irrigation, scouting, labor, and frost surfaces
 - clearer status messaging
 - setup guidance and empty states
 
 Deliverables:
 
-- degree-day page
+- payroll/export completion on top of approved labor entries
 - key UX polish on launch workflows
 - reduced ambiguity in early-stage surfaces
 
@@ -362,9 +360,9 @@ Reason:
 
 ## Current Recommendation For The Very Next Development Thread
 
-If staying within product-development work while the broader production plan is being prepared, the best next contained product slice is still:
+If staying within product-development work while the broader production plan is being prepared, the best next contained product slice is now:
 
-- build the first degree-day dashboard page on the existing persisted environmental data
+- deepen AgWorld reconciliation UX around the current persisted workspace, mapping, and sync-log flow
 
 But if the team shifts from product depth into launch readiness immediately, the best next thread should instead be:
 
@@ -392,6 +390,6 @@ RanchOS can move toward **go for production** when:
 
 ## Related Reference Files
 
-- `CURRENT_STATE_2026-04-09.md`
+- `CURRENT_STATE_2026-04-11.md`
 - `RanchOS_Handover_2026-04-05.md`
 - `Higher_Phase_Options_2026-04-06.md`

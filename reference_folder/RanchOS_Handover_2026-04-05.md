@@ -3,6 +3,12 @@
 Last updated: 2026-04-08
 Workspace: `C:\Users\sati1\Desktop\RanchOS`
 
+Historical note:
+
+- this handover is preserved for the April 8 checkpoint only
+- later April 11 threads added broader advisor snapshot/handoff UX, broader AgWorld reconciliation visibility, and multi-ranch scouting, irrigation, harvest, compliance, and labor views
+- use `CURRENT_STATE_2026-04-11.md` as the source of truth for current status and the next recommended slice
+
 ## Current State
 
 RanchOS is now past the early MVP handoff. The main DB-backed ranch operations flows are live, the first Phase 3 depth slices landed, and Phase 4 async intelligence has begun.

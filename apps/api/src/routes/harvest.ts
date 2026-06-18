@@ -859,13 +859,16 @@ app.patch('/handler-ticket-imports/:id', async (c) => {
 
 app.get('/export.csv', async (c) => {
   const orgId = c.get('orgId');
+  const ranchId = normalizeText(c.req.query('ranch_id'));
   const eventRows = await db
     .select()
     .from(harvestEvents)
     .where(eq(harvestEvents.orgId, orgId))
     .orderBy(desc(harvestEvents.harvestDate), desc(harvestEvents.createdAt));
 
-  const payload = await buildHarvestPayloads(eventRows);
+  const payload = (await buildHarvestPayloads(eventRows)).filter((event) =>
+    ranchId ? event.block?.ranchId === ranchId : true,
+  );
   const rows = [
     [
       'Harvest Date',

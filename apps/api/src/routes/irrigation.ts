@@ -265,14 +265,12 @@ function sanitizeEventInput(body: Record<string, unknown>, options: { partial?: 
 
 app.get('/', async (c) => {
   const orgId = c.get('orgId');
-  const ranchId = c.req.query('ranch_id');
+  const ranchId = normalizeText(c.req.query('ranch_id'));
 
   try {
-    if (!ranchId) {
-      return c.json({ error: 'ranch_id is required.' }, 400);
+    if (ranchId) {
+      await requireOwnedRanch(orgId, ranchId);
     }
-
-    await requireOwnedRanch(orgId, ranchId);
 
     const blockRows = await db
       .select({
@@ -288,7 +286,11 @@ app.get('/', async (c) => {
         active: blocks.active,
       })
       .from(blocks)
-      .where(and(eq(blocks.orgId, orgId), eq(blocks.ranchId, ranchId), eq(blocks.active, true)))
+      .where(
+        ranchId
+          ? and(eq(blocks.orgId, orgId), eq(blocks.ranchId, ranchId), eq(blocks.active, true))
+          : and(eq(blocks.orgId, orgId), eq(blocks.active, true)),
+      )
       .orderBy(asc(blocks.name));
 
     const blockIds = blockRows.map((block) => block.id);
