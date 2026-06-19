@@ -1,0 +1,71 @@
+
+> web@0.1.0 build
+> next build
+
+▲ Next.js 16.2.2 (Turbopack)
+
+  Creating an optimized production build ...
+Turbopack build encountered 1 warnings:
+./apps/web/next.config.ts
+Encountered unexpected file in NFT list
+A file was traced that indicates that the whole project was traced unintentionally. Somewhere in the import trace below, there are:
+- filesystem operations (like path.join, path.resolve or fs.readFile), or
+- very dynamic requires (like require('./' + foo)).
+To resolve this, you can
+- remove them if possible, or
+- only use them in development, or
+- make sure they are statically scoped to some subfolder: path.join(process.cwd(), 'data', bar), or
+- add ignore comments: path.join(/*turbopackIgnore: true*/ process.cwd(), bar)
+
+Import trace:
+  Server Component:
+    ./apps/web/next.config.ts
+    ./apps/web/src/lib/theme-specs.ts
+    ./apps/web/src/app/(dashboard)/themes/[themeId]/page.tsx
+
+
+✓ Compiled successfully in 8.0s
+  Running TypeScript ...
+  Finished TypeScript in 9.4s ...
+  Collecting page data using 7 workers ...
+  Generating static pages using 7 workers (0/27) ...
+  Generating static pages using 7 workers (6/27) 
+  Generating static pages using 7 workers (13/27) 
+  Generating static pages using 7 workers (20/27) 
+✓ Generating static pages using 7 workers (27/27) in 746ms
+  Finalizing page optimization ...
+
+Route (app)
+┌ ○ /
+├ ○ /_not-found
+├ ○ /blocks
+├ ƒ /blocks/[id]
+├ ○ /blocks/new
+├ ○ /compliance
+├ ○ /degree-days
+├ ○ /harvest
+├ ○ /intelligence
+├ ○ /irrigation
+├ ○ /labor
+├ ○ /login
+├ ○ /onboarding
+├ ○ /overview
+├ ○ /scouting
+├ ○ /settings
+├ ○ /settings/advisor
+├ ○ /settings/agworld
+├ ○ /settings/frost
+├ ○ /settings/notifications
+├ ○ /settings/team
+├ ○ /sgma
+├ ○ /signup
+├ ○ /tasks
+├ ƒ /tasks/[id]
+├ ○ /tasks/new
+├ ○ /themes
+└ ƒ /themes/[themeId]
+
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+

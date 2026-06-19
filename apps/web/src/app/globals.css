@@ -1,0 +1,203 @@
+@import "tailwindcss";
+
+@theme {
+  --color-soil-DEFAULT: #7C5C3E;
+  --color-soil-dark: #5A3E26;
+  --color-leaf-DEFAULT: var(--color-leaf);
+  --color-leaf-dark: var(--color-leaf-dark);
+  --color-leaf-light: var(--color-leaf-light);
+  --color-sky-DEFAULT: var(--color-sky);
+  --color-sky-dark: var(--color-sky-dark);
+  --color-sky-light: var(--color-sky-light);
+  --color-sun-DEFAULT: var(--color-sun);
+  --color-sun-dark: var(--color-sun-dark);
+  --color-sun-light: var(--color-sun-light);
+  --color-ranch-bg: var(--color-bg-primary);
+  --color-ranch-card: var(--color-bg-card);
+  --color-ranch-sidebar: var(--color-bg-sidebar);
+  --color-ranch-border: var(--color-border);
+}
+
+:root {
+  --color-bg-primary: #FAFAF9;
+  --color-bg-secondary: #F5F3F0;
+  --color-bg-card: #FFFFFF;
+  --color-bg-sidebar: #1C1917;
+  --color-bg-overlay: rgba(28, 25, 23, 0.58);
+  --color-sidebar-text: #FAFAF9;
+  --color-sidebar-text-muted: #D6D3D1;
+  --color-text-primary: #1C1917;
+  --color-text-secondary: #57534E;
+  --color-text-muted: #A8A29E;
+  --color-text-inverse: #FAFAF9;
+  --color-border: #E7E5E4;
+  --color-border-strong: #D6D3D1;
+  --color-leaf: #3D7A4F;
+  --color-leaf-dark: #2A5738;
+  --color-leaf-light: #D1FAE5;
+  --color-sky: #3B8BEB;
+  --color-sky-dark: #2466C2;
+  --color-sky-light: #DBEAFE;
+  --color-sun: #F5A623;
+  --color-sun-dark: #D4851A;
+  --color-sun-light: #FEF3C7;
+  --color-status-success: #16A34A;
+  --color-status-info: #2563EB;
+  --color-status-warning: #F59E0B;
+  --color-status-danger: #DC2626;
+  --color-status-neutral: #6B7280;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not(.theme-1):not(.theme-2):not(.theme-dark) {
+    --color-bg-primary: #0C0A09;
+    --color-bg-secondary: #1C1917;
+    --color-bg-card: #292524;
+    --color-bg-sidebar: #0C0A09;
+    --color-text-primary: #FAFAF9;
+    --color-text-secondary: #D6D3D1;
+    --color-border: #3D3937;
+  }
+}
+
+body {
+  background-color: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  font-family: var(--font-geist-sans), 'Inter', system-ui, sans-serif;
+  transition: background-color 180ms ease, color 180ms ease;
+}
+
+button,
+input,
+textarea,
+select,
+a {
+  transition: background-color 180ms ease, border-color 180ms ease, color 180ms ease, box-shadow 180ms ease;
+}
+
+::selection {
+  background-color: color-mix(in srgb, var(--color-leaf) 28%, transparent);
+  color: var(--color-text-primary);
+}
+
+.theme-card {
+  background-color: var(--color-bg-card);
+  border-color: var(--color-border);
+  color: var(--color-text-primary);
+}
+
+.theme-card-header {
+  border-color: var(--color-border);
+}
+
+.theme-text-secondary {
+  color: var(--color-text-secondary);
+}
+
+.theme-text-muted {
+  color: var(--color-text-muted);
+}
+
+.theme-border {
+  border-color: var(--color-border);
+}
+
+.theme-border-strong {
+  border-color: var(--color-border-strong);
+}
+
+.theme-input {
+  background-color: var(--color-bg-secondary);
+  border-color: var(--color-border);
+  color: var(--color-text-primary);
+}
+
+.theme-input::placeholder {
+  color: var(--color-text-muted);
+}
+
+.theme-button-secondary {
+  background-color: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+  border-color: var(--color-border);
+}
+
+.theme-button-primary {
+  background-color: var(--color-leaf);
+  color: #fff;
+  box-shadow: 0 1px 2px rgba(16, 24, 32, 0.12);
+}
+
+.theme-button-primary:hover {
+  background-color: var(--color-leaf-dark);
+}
+
+.theme-button-secondary:hover {
+  background-color: color-mix(in srgb, var(--color-bg-secondary) 78%, var(--color-text-primary) 22%);
+}
+
+.theme-button-ghost {
+  color: var(--color-text-secondary);
+}
+
+.theme-button-ghost:hover {
+  background-color: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+}
+
+.theme-button-outline {
+  background-color: transparent;
+  border-color: var(--color-border);
+  color: var(--color-text-secondary);
+}
+
+.theme-button-outline:hover {
+  background-color: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+}
+
+html[class*='theme-'] .bg-white {
+  background-color: var(--color-bg-card) !important;
+}
+
+html[class*='theme-'] .bg-gray-50,
+html[class*='theme-'] .bg-gray-100,
+html[class*='theme-'] .bg-stone-50,
+html[class*='theme-'] .bg-stone-100 {
+  background-color: var(--color-bg-secondary) !important;
+}
+
+html[class*='theme-'] .border-gray-100,
+html[class*='theme-'] .border-gray-200,
+html[class*='theme-'] .border-stone-200,
+html[class*='theme-'] .border-stone-300 {
+  border-color: var(--color-border) !important;
+}
+
+html[class*='theme-'] .text-gray-900,
+html[class*='theme-'] .text-stone-900 {
+  color: var(--color-text-primary) !important;
+}
+
+html[class*='theme-'] .text-gray-700,
+html[class*='theme-'] .text-gray-600,
+html[class*='theme-'] .text-stone-700 {
+  color: var(--color-text-secondary) !important;
+}
+
+html[class*='theme-'] .text-gray-500,
+html[class*='theme-'] .text-gray-400,
+html[class*='theme-'] .text-stone-500,
+html[class*='theme-'] .text-neutral-400 {
+  color: var(--color-text-muted) !important;
+}
+
+html[class*='theme-'] .hover\:bg-gray-50:hover,
+html[class*='theme-'] .hover\:bg-gray-100:hover,
+html[class*='theme-'] .hover\:bg-gray-200:hover {
+  background-color: var(--color-bg-secondary) !important;
+}
+
+html[class*='theme-'] .hover\:text-gray-900:hover {
+  color: var(--color-text-primary) !important;
+}
