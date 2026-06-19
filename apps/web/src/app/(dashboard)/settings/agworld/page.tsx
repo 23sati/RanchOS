@@ -2187,7 +2187,7 @@ export default function AgworldSettingsPage() {
                     <div>
                       <h3 className="font-semibold text-gray-900">External handoff</h3>
                       <p className="mt-1 text-sm text-gray-600">
-                        Copy or download this record's persisted reconciliation trail without creating a second AgWorld access route.
+                        Copy or download this persisted reconciliation trail without creating a second AgWorld access route.
                       </p>
                     </div>
                     <div className="flex flex-wrap gap-3">

@@ -49,6 +49,11 @@ type RemovableFeature = {
   remove: () => void;
 };
 
+type SnapMessageState = {
+  contextKey: string;
+  message: string;
+};
+
 function fitMapToCollection(map: maplibregl.Map, collection: FeatureCollection) {
   if (!collection.features.length) {
     return;
@@ -113,7 +118,7 @@ export default function BlockMap({
   const onGeometryChangeRef = useRef(onGeometryChange);
   const [isMapReady, setIsMapReady] = useState(false);
   const [activeTool, setActiveTool] = useState<EditorTool>(null);
-  const [snapMessage, setSnapMessage] = useState('');
+  const [snapMessageState, setSnapMessageState] = useState<SnapMessageState | null>(null);
 
   const blockFeatures = useMemo<FeatureCollection>(() => ({
     type: 'FeatureCollection',
@@ -126,6 +131,16 @@ export default function BlockMap({
     () => JSON.stringify(geometry ?? null),
     [geometry],
   );
+
+  const ranchBoundaryKey = useMemo(
+    () => JSON.stringify(ranchBoundary ?? null),
+    [ranchBoundary],
+  );
+
+  const snapMessageContextKey = `${geometryKey}:${ranchBoundaryKey}`;
+  const snapMessage = snapMessageState?.contextKey === snapMessageContextKey
+    ? snapMessageState.message
+    : '';
 
   const visibleCropTypes = useMemo(
     () =>
@@ -142,10 +157,6 @@ export default function BlockMap({
   useEffect(() => {
     onGeometryChangeRef.current = onGeometryChange;
   }, [onGeometryChange]);
-
-  useEffect(() => {
-    setSnapMessage('');
-  }, [geometryKey, ranchBoundary]);
 
   const syncActiveTool = () => {
     const geomanInstance = geoman.current;
@@ -250,17 +261,21 @@ export default function BlockMap({
 
     const snappedGeometry = snapGeometryInsideBoundary(geometry, ranchBoundary);
     if (!snappedGeometry) {
-      setSnapMessage('No overlapping area was found inside the ranch boundary.');
+      setSnapMessageState({
+        contextKey: snapMessageContextKey,
+        message: 'No overlapping area was found inside the ranch boundary.',
+      });
       return;
     }
 
     const geometryChanged = JSON.stringify(snappedGeometry) !== JSON.stringify(geometry);
     onGeometryChangeRef.current?.(snappedGeometry, calculateGeometryAcres(snappedGeometry));
-    setSnapMessage(
-      geometryChanged
+    setSnapMessageState({
+      contextKey: snapMessageContextKey,
+      message: geometryChanged
         ? 'Block boundary snapped inside the ranch footprint.'
         : 'Block boundary already fits inside the ranch footprint.',
-    );
+    });
 
     const geomanInstance = geoman.current;
     if (geomanInstance) {

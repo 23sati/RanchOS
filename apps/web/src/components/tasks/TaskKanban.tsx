@@ -1,17 +1,27 @@
 'use client';
-import { useState } from 'react';
 
-const COLUMNS = ['pending', 'in_progress', 'completed', 'overdue'];
+import type { TaskPriority } from '@/lib/tasks';
 
-export default function TaskKanban({ tasks = [] }: { tasks?: any[] }) {
-  // Simple Kanban board prototype
-  const [boardTasks, setBoardTasks] = useState(
-    tasks.length ? tasks : [
-      { id: '1', title: 'Irrigate Block A', status: 'pending', priority: 'high', type: 'Irrigate' },
-      { id: '2', title: 'Spray Block B', status: 'in_progress', priority: 'urgent', type: 'Spray' },
-      { id: '3', title: 'Fertilize Block C', status: 'completed', priority: 'normal', type: 'Fertilize' },
-    ]
-  );
+const COLUMNS = ['pending', 'in_progress', 'completed', 'overdue'] as const;
+
+type TaskKanbanColumn = (typeof COLUMNS)[number];
+
+type TaskKanbanTask = {
+  id: string;
+  title: string;
+  status: TaskKanbanColumn;
+  priority: TaskPriority;
+  type: string;
+};
+
+const FALLBACK_TASKS: TaskKanbanTask[] = [
+  { id: '1', title: 'Irrigate Block A', status: 'pending', priority: 'high', type: 'Irrigate' },
+  { id: '2', title: 'Spray Block B', status: 'in_progress', priority: 'urgent', type: 'Spray' },
+  { id: '3', title: 'Fertilize Block C', status: 'completed', priority: 'normal', type: 'Fertilize' },
+];
+
+export default function TaskKanban({ tasks = [] }: { tasks?: TaskKanbanTask[] }) {
+  const boardTasks = tasks.length ? tasks : FALLBACK_TASKS;
 
   return (
     <div className="flex h-full gap-6 w-full overflow-x-auto min-h-[500px] p-4">
