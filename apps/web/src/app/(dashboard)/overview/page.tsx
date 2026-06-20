@@ -58,12 +58,30 @@ const emptyComplianceDashboard: ComplianceDashboardPayload = {
   products: [],
   scoutingLogs: [],
   applications: [],
+  pesticideInventoryItems: [],
+  pesticideInventoryStocks: [],
+  reiCalendar: [],
+  annualSummary: {
+    activeIngredients: [],
+    counties: [],
+  },
+  organicSummary: {
+    certifierName: '',
+    organicBlocks: [],
+    applications: [],
+  },
+  automationQueue: [],
   summary: {
     products: 0,
     applications: 0,
+    pesticideApplications: 0,
+    dprReady: 0,
+    blockedPesticides: 0,
     activeRei: 0,
     activePhi: 0,
     organicApplications: 0,
+    syncedInventoryRecords: 0,
+    restrictedUseApplications: 0,
   },
 };
 

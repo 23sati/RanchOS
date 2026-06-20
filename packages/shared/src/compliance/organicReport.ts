@@ -1,55 +1,95 @@
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
-interface OrganicInput {
-  date: string;
-  block: string;
-  product: string;
-  omri: boolean;
+export interface OrganicBlockReportRow {
+  blockName: string;
+  acreage: string;
+  apn: string;
+  certifiedSince: string;
+}
+
+export interface OrganicInputLogRow {
+  dateApplied: string;
+  blockName: string;
+  productName: string;
+  omriStatus: string;
+  applicatorName: string;
   rate: string;
-  total: string;
+  totalUsed: string;
   notes: string;
 }
 
-export function generateCCOFOrganicReport(orgName: string, inputs: OrganicInput[]) {
-  const doc = new jsPDF('p', 'mm', 'a4'); // Portrait
+export interface OrganicReportOptions {
+  operationName: string;
+  certifierName: string;
+  reportLabel: string;
+}
 
-  // Organic Header
-  doc.setFillColor(209, 250, 229); // leaf-light
-  doc.rect(14, 10, 182, 20, 'F');
-  doc.setFontSize(22);
-  doc.setTextColor(61, 122, 79); // leaf
-  doc.text('ORGANIC SYSTEM PLAN: INPUT LOG', 20, 22);
+export function buildOrganicInputLogPdf(
+  options: OrganicReportOptions,
+  blocks: OrganicBlockReportRow[],
+  inputs: OrganicInputLogRow[],
+) {
+  const doc = new jsPDF('p', 'mm', 'a4');
 
-  doc.setFontSize(10);
+  doc.setFillColor(220, 252, 231);
+  doc.rect(14, 10, 182, 18, 'F');
+  doc.setFontSize(18);
+  doc.setTextColor(22, 101, 52);
+  doc.text('Organic Input Compliance Log', 18, 21);
   doc.setTextColor(0, 0, 0);
-  doc.text(`Certifier: CCOF (California Certified Organic Farmers)`, 14, 38);
-  doc.text(`Operation: ${orgName}`, 14, 44);
-  doc.text(`Report Year: ${new Date().getFullYear()}`, 140, 44);
-
-  const tableData = inputs.map(i => [
-    i.date,
-    i.block,
-    i.product,
-    i.omri ? 'YES (OMRI Verified)' : 'NO (WARNING)',
-    i.rate,
-    i.total,
-    i.notes
-  ]);
+  doc.setFontSize(10);
+  doc.text(`Operation: ${options.operationName}`, 14, 34);
+  doc.text(`Certifier: ${options.certifierName}`, 14, 40);
+  doc.text(`Period: ${options.reportLabel}`, 14, 46);
 
   autoTable(doc, {
-    startY: 55,
-    head: [['Date Applied', 'Block/Field', 'Product Name', 'OMRI Listed', 'Application Rate', 'Total Quantity', 'Notes/Batch #']],
-    body: tableData,
+    startY: 54,
+    head: [['Organic Block', 'Acreage', 'APN', 'Certified Since']],
+    body: blocks.map((block) => [
+      block.blockName,
+      block.acreage,
+      block.apn,
+      block.certifiedSince,
+    ]),
     theme: 'grid',
-    headStyles: { fillColor: [61, 122, 79], textColor: 255, fontSize: 9 },
-    bodyStyles: { fontSize: 8 },
-    styles: { overflow: 'linebreak', cellPadding: 3 },
-    columnStyles: {
-      3: { cellWidth: 25 },
-      6: { cellWidth: 40 }
-    }
+    headStyles: { fillColor: [61, 122, 79], textColor: 255, fontSize: 8 },
+    bodyStyles: { fontSize: 7.5 },
+    margin: { left: 14, right: 14 },
   });
 
-  return doc.output('blob');
+  const blocksTableBottom = (doc as jsPDF & { lastAutoTable?: { finalY?: number } }).lastAutoTable?.finalY ?? 80;
+  doc.setFontSize(11);
+  doc.text('Input activity on organic blocks', 14, blocksTableBottom + 10);
+
+  autoTable(doc, {
+    startY: blocksTableBottom + 14,
+    head: [[
+      'Date',
+      'Block',
+      'Product',
+      'OMRI / Organic Status',
+      'Applicator',
+      'Rate',
+      'Total Used',
+      'Notes',
+    ]],
+    body: inputs.map((input) => [
+      input.dateApplied,
+      input.blockName,
+      input.productName,
+      input.omriStatus,
+      input.applicatorName,
+      input.rate,
+      input.totalUsed,
+      input.notes,
+    ]),
+    theme: 'grid',
+    headStyles: { fillColor: [61, 122, 79], textColor: 255, fontSize: 8 },
+    bodyStyles: { fontSize: 7, cellPadding: 2 },
+    styles: { overflow: 'linebreak' },
+    margin: { left: 14, right: 14 },
+  });
+
+  return doc.output('arraybuffer');
 }

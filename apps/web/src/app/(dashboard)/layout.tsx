@@ -1,7 +1,7 @@
 'use client';
 import { ReactNode, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Home, Map as MapIcon, ListTodo, Settings, LogOut, Leaf, Bell, Search, Droplet, Bug, FileText, Brain, Palette, Users, Tractor, CalendarDays, Waves } from 'lucide-react';
+import { Home, Map as MapIcon, ListTodo, Settings, LogOut, Leaf, Bell, Search, Droplet, Bug, FileText, Brain, Palette, Users, Tractor, CalendarDays, Waves, Boxes } from 'lucide-react';
 import { authClient } from '@/lib/auth/client';
 import { fetchOnboardingStatus, OnboardingStatus } from '@/lib/onboarding';
 import {
@@ -152,6 +152,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     { name: 'Scouting & IPM', icon: Bug, href: '/scouting' },
     { name: 'Labor', icon: Users, href: '/labor' },
     { name: 'Harvest', icon: Tractor, href: '/harvest' },
+    { name: 'Inventory', icon: Boxes, href: '/inventory' },
     { name: 'Intelligence', icon: Brain, href: '/intelligence' },
     { name: 'Degree Days', icon: CalendarDays, href: '/degree-days' },
     { name: 'SGMA', icon: Waves, href: '/sgma' },

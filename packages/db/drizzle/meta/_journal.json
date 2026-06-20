@@ -113,6 +113,20 @@
       "when": 1775718000000,
       "tag": "0015_amber_widow",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1781920107006,
+      "tag": "0016_tan_talos",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1781922113401,
+      "tag": "0017_fast_luminals",
+      "breakpoints": true
     }
   ]
 }

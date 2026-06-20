@@ -1,71 +1,121 @@
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
-interface SprayRecord {
-  date: string;
+export interface DprSprayReportRow {
+  dateApplied: string;
   county: string;
-  blockName: string;
-  commodity: string;
+  studySite: string;
+  commoditySite: string;
   pest: string;
-  totalAcres: number;
-  acresTreated: number;
+  totalAcresPlanted: string;
+  totalAcresTreated: string;
   productName: string;
-  epaReg: string;
-  ratePerAc: string;
-  totalUsed: string;
-  applicator: string;
+  epaRegNumber: string;
+  amountPerAcre: string;
+  totalAmountUsed: string;
+  applicatorName: string;
+  applicatorLicense: string;
   startTime: string;
   endTime: string;
+  tempF: string;
+  windSpeed: string;
+  windDirection: string;
+  omriListed?: string;
+  certifierNotified?: string;
 }
 
-export function generateDPRSprayReport(orgName: string, records: SprayRecord[]) {
-  const doc = new jsPDF('l', 'mm', 'a4'); // Landscape
+export interface DprSprayReportOptions {
+  growerName: string;
+  operatorName: string;
+  operatorLicense?: string | null;
+  reportPeriodLabel: string;
+  organicOperation?: boolean;
+}
 
-  // Header 
+export function buildDprSprayReportPdf(
+  options: DprSprayReportOptions,
+  rows: DprSprayReportRow[],
+) {
+  const doc = new jsPDF('l', 'mm', 'a4');
+
   doc.setFontSize(16);
-  doc.text('Pesticide Use Report - California DPR Format', 14, 15);
+  doc.text('California DPR Pesticide Use Report', 14, 15);
   doc.setFontSize(10);
-  doc.text(`Grower/Entity: ${orgName}`, 14, 22);
-  doc.text(`Generated Date: ${new Date().toLocaleDateString()}`, 240, 22);
+  doc.text(`Grower: ${options.growerName}`, 14, 22);
+  doc.text(`Operator: ${options.operatorName}`, 90, 22);
+  doc.text(`License: ${options.operatorLicense ?? 'Not provided'}`, 170, 22);
+  doc.text(`Period: ${options.reportPeriodLabel}`, 240, 22, { align: 'right' });
 
-  const tableData = records.map(r => [
-    r.date,
-    r.county,
-    r.blockName,
-    r.commodity,
-    r.pest,
-    r.acresTreated,
-    r.productName,
-    r.epaReg,
-    r.ratePerAc,
-    r.totalUsed,
-    r.applicator,
-    r.startTime,
-    r.endTime
+  if (options.organicOperation) {
+    doc.setFillColor(220, 252, 231);
+    doc.rect(14, 26, 277, 9, 'F');
+    doc.setFontSize(9);
+    doc.setTextColor(22, 101, 52);
+    doc.text('ORGANIC OPERATION - include OMRI and certifier-notification review below', 16, 31.5);
+    doc.setTextColor(0, 0, 0);
+  }
+
+  const tableHead = [[
+    'Date Applied',
+    'County',
+    'Study Site',
+    'Commodity / Site',
+    'Pest',
+    'Acres Planted',
+    'Acres Treated',
+    'Product Name',
+    'EPA Reg #',
+    'Amount / Acre',
+    'Total Used',
+    'Applicator',
+    'License #',
+    'Start',
+    'End',
+    'Temp F',
+    'Wind Speed',
+    'Wind Dir',
+    ...(options.organicOperation ? ['OMRI', 'Certifier'] : []),
+  ]];
+
+  const body = rows.map((row) => [
+    row.dateApplied,
+    row.county,
+    row.studySite,
+    row.commoditySite,
+    row.pest,
+    row.totalAcresPlanted,
+    row.totalAcresTreated,
+    row.productName,
+    row.epaRegNumber,
+    row.amountPerAcre,
+    row.totalAmountUsed,
+    row.applicatorName,
+    row.applicatorLicense,
+    row.startTime,
+    row.endTime,
+    row.tempF,
+    row.windSpeed,
+    row.windDirection,
+    ...(options.organicOperation ? [row.omriListed ?? '', row.certifierNotified ?? ''] : []),
   ]);
 
   autoTable(doc, {
-    startY: 30,
-    head: [['Date', 'County', 'Block', 'Crop', 'Pest', 'Acres', 'Product', 'EPA Reg #', 'Rate/Ac', 'Total', 'Applicator', 'Start', 'End']],
-    body: tableData,
+    startY: options.organicOperation ? 39 : 28,
+    head: tableHead,
+    body,
     theme: 'grid',
-    headStyles: { fillColor: [61, 122, 79], textColor: 255, fontSize: 8 },
-    bodyStyles: { fontSize: 7 },
-    columnStyles: {
-      0: { cellWidth: 15 },
-      1: { cellWidth: 15 },
-      2: { cellWidth: 20 },
-      6: { cellWidth: 30 },
-      7: { cellWidth: 20 },
-    }
+    headStyles: { fillColor: [61, 122, 79], textColor: 255, fontSize: 7 },
+    bodyStyles: { fontSize: 6.5, cellPadding: 1.5, valign: 'middle' },
+    styles: { overflow: 'linebreak' },
+    margin: { left: 10, right: 10 },
   });
 
-  // Footer for signature
-  const finalY = (doc as any).lastAutoTable.finalY + 15;
-  doc.line(14, finalY, 100, finalY);
-  doc.text('Authorized Signature', 14, finalY + 5);
-  doc.line(120, finalY, 150, finalY);
-  doc.text('Date signed', 120, finalY + 5);
+  const finalY = (doc as jsPDF & { lastAutoTable?: { finalY?: number } }).lastAutoTable?.finalY ?? 180;
+  doc.setFontSize(9);
+  doc.line(16, finalY + 12, 95, finalY + 12);
+  doc.text('Grower / authorized signature', 16, finalY + 17);
+  doc.line(115, finalY + 12, 155, finalY + 12);
+  doc.text('Date signed', 115, finalY + 17);
 
-  return doc.output('blob');
+  return doc.output('arraybuffer');
 }

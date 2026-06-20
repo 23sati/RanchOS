@@ -55,6 +55,15 @@ const sentinelTablesByTag: Record<string, string[]> = {
     'notification_settings',
     'notification_deliveries',
   ],
+  '0016_tan_talos': [
+    'inventory_items',
+    'inventory_locations',
+    'inventory_stocks',
+    'inventory_movements',
+  ],
+  '0017_fast_luminals': [
+    'product_inventory_links',
+  ],
 };
 
 function readJournal(): JournalEntry[] {

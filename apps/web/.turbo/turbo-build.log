@@ -24,15 +24,15 @@ Import trace:
     ./apps/web/src/app/(dashboard)/themes/[themeId]/page.tsx
 
 
-✓ Compiled successfully in 8.0s
+✓ Compiled successfully in 14.1s
   Running TypeScript ...
-  Finished TypeScript in 9.4s ...
+  Finished TypeScript in 11.2s ...
   Collecting page data using 7 workers ...
-  Generating static pages using 7 workers (0/27) ...
-  Generating static pages using 7 workers (6/27) 
-  Generating static pages using 7 workers (13/27) 
-  Generating static pages using 7 workers (20/27) 
-✓ Generating static pages using 7 workers (27/27) in 746ms
+  Generating static pages using 7 workers (0/28) ...
+  Generating static pages using 7 workers (7/28) 
+  Generating static pages using 7 workers (14/28) 
+  Generating static pages using 7 workers (21/28) 
+✓ Generating static pages using 7 workers (28/28) in 702ms
   Finalizing page optimization ...
 
 Route (app)
@@ -45,6 +45,7 @@ Route (app)
 ├ ○ /degree-days
 ├ ○ /harvest
 ├ ○ /intelligence
+├ ○ /inventory
 ├ ○ /irrigation
 ├ ○ /labor
 ├ ○ /login

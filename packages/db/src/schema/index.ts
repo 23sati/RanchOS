@@ -15,6 +15,10 @@ export const taskStatusEnum = pgEnum('task_status', ['pending','in_progress','co
 export const taskPriorityEnum = pgEnum('task_priority', ['low','normal','high','urgent']);
 export const notificationDeliveryChannelEnum = pgEnum('notification_delivery_channel', ['push', 'email']);
 export const notificationDeliveryStatusEnum = pgEnum('notification_delivery_status', ['pending', 'deferred', 'sent', 'failed', 'canceled']);
+export const inventoryCategoryEnum = pgEnum('inventory_category', ['fertilizer', 'pesticide', 'soil_amendment', 'fuel', 'irrigation', 'parts', 'packaging', 'tool', 'safety', 'other']);
+export const inventoryUnitEnum = pgEnum('inventory_unit', ['gallon', 'quart', 'pound', 'ounce', 'ton', 'bag', 'case', 'each', 'foot', 'bin']);
+export const inventoryLocationTypeEnum = pgEnum('inventory_location_type', ['warehouse', 'shop', 'yard', 'field', 'vehicle', 'cold_storage', 'other']);
+export const inventoryMovementTypeEnum = pgEnum('inventory_movement_type', ['purchase', 'transfer', 'usage', 'adjustment_in', 'adjustment_out', 'return', 'waste']);
 
 export const user = pgTable('users', {
   id: uuid('id').primaryKey().default(sql`uuid_generate_v4()`),
@@ -381,6 +385,7 @@ export const products = pgTable('products', {
   epaRegNumber: text('epa_reg_number'),
   cdfaRegNumber: text('cdfa_reg_number'),
   dprProductId: text('dpr_product_id'),
+  labelUrl: text('label_url'),
   productName: text('product_name').notNull(),
   manufacturer: text('manufacturer'),
   activeIngredients: jsonb('active_ingredients'),
@@ -398,6 +403,19 @@ export const products = pgTable('products', {
 }, (table) => ({
   nameIdx: index('products_name_idx').on(table.productName), // Simplified from ts_vector for now
   organicIdx: index('products_organic_idx').on(table.isOmriListed, table.isCdfaOrganic),
+}));
+
+export const productInventoryLinks = pgTable('product_inventory_links', {
+  id: uuid('id').primaryKey().default(sql`uuid_generate_v4()`),
+  orgId: uuid('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  productId: uuid('product_id').notNull().references(() => products.id, { onDelete: 'cascade' }),
+  inventoryItemId: uuid('inventory_item_id').notNull().references(() => inventoryItems.id, { onDelete: 'cascade' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+  updatedBy: uuid('updated_by').references(() => profiles.id),
+}, (table) => ({
+  orgProductUnq: unique('product_inventory_links_org_product_unq').on(table.orgId, table.productId),
+  orgInventoryIdx: index('product_inventory_links_org_inventory_idx').on(table.orgId, table.inventoryItemId),
 }));
 
 export const applicationRecords = pgTable('application_records', {
@@ -424,6 +442,7 @@ export const applicationRecords = pgTable('application_records', {
   tempF: decimal('temp_f', { precision: 5, scale: 2 }),
   targetPest: text('target_pest'),
   targetPestScoutingLogId: uuid('target_pest_scouting_log_id').references(() => scoutingLogs.id),
+  sourceInventoryStockId: uuid('source_inventory_stock_id').references((): AnyPgColumn => inventoryStocks.id, { onDelete: 'set null' }),
   acresTreated: decimal('acres_treated', { precision: 10, scale: 2 }).notNull(),
   equipmentUsed: text('equipment_used'),
   reiExpiry: timestamp('rei_expiry', { withTimezone: true }),
@@ -528,6 +547,110 @@ export const orgIntegrations = pgTable('org_integrations', {
   isActive: boolean('is_active').default(true),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
 });
+
+export const inventoryItems = pgTable('inventory_items', {
+  id: uuid('id').primaryKey().default(sql`uuid_generate_v4()`),
+  orgId: uuid('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  sku: text('sku'),
+  name: text('name').notNull(),
+  category: text('category', {
+    enum: ['fertilizer', 'pesticide', 'soil_amendment', 'fuel', 'irrigation', 'parts', 'packaging', 'tool', 'safety', 'other'],
+  }).notNull().default('other'),
+  unit: text('unit', {
+    enum: ['gallon', 'quart', 'pound', 'ounce', 'ton', 'bag', 'case', 'each', 'foot', 'bin'],
+  }).notNull().default('each'),
+  manufacturer: text('manufacturer'),
+  supplier: text('supplier'),
+  description: text('description'),
+  storageNotes: text('storage_notes'),
+  reorderPoint: decimal('reorder_point', { precision: 12, scale: 2 }).notNull().default('0'),
+  targetStock: decimal('target_stock', { precision: 12, scale: 2 }),
+  defaultUnitCost: decimal('default_unit_cost', { precision: 12, scale: 2 }),
+  lotTracking: boolean('lot_tracking').notNull().default(true),
+  restrictedUse: boolean('restricted_use').notNull().default(false),
+  active: boolean('active').notNull().default(true),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+  updatedBy: uuid('updated_by').references(() => profiles.id),
+}, (table) => ({
+  orgCategoryIdx: index('inventory_items_org_category_idx').on(table.orgId, table.category, table.active),
+  orgSkuUnq: unique('inventory_items_org_sku_unq').on(table.orgId, table.sku),
+}));
+
+export const inventoryLocations = pgTable('inventory_locations', {
+  id: uuid('id').primaryKey().default(sql`uuid_generate_v4()`),
+  orgId: uuid('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  ranchId: uuid('ranch_id').references(() => ranches.id, { onDelete: 'set null' }),
+  name: text('name').notNull(),
+  code: text('code'),
+  locationType: text('location_type', {
+    enum: ['warehouse', 'shop', 'yard', 'field', 'vehicle', 'cold_storage', 'other'],
+  }).notNull().default('warehouse'),
+  notes: text('notes'),
+  active: boolean('active').notNull().default(true),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+  updatedBy: uuid('updated_by').references(() => profiles.id),
+}, (table) => ({
+  orgActiveIdx: index('inventory_locations_org_active_idx').on(table.orgId, table.active),
+  ranchIdx: index('inventory_locations_ranch_idx').on(table.ranchId),
+  orgCodeUnq: unique('inventory_locations_org_code_unq').on(table.orgId, table.code),
+}));
+
+export const inventoryStocks = pgTable('inventory_stocks', {
+  id: uuid('id').primaryKey().default(sql`uuid_generate_v4()`),
+  orgId: uuid('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  itemId: uuid('item_id').notNull().references(() => inventoryItems.id, { onDelete: 'cascade' }),
+  locationId: uuid('location_id').notNull().references(() => inventoryLocations.id, { onDelete: 'cascade' }),
+  lotCode: text('lot_code'),
+  expirationDate: date('expiration_date'),
+  receivedDate: date('received_date'),
+  quantityOnHand: decimal('quantity_on_hand', { precision: 12, scale: 2 }).notNull().default('0'),
+  unitCost: decimal('unit_cost', { precision: 12, scale: 2 }),
+  vendorName: text('vendor_name'),
+  referenceNumber: text('reference_number'),
+  notes: text('notes'),
+  active: boolean('active').notNull().default(true),
+  lastMovementAt: timestamp('last_movement_at', { withTimezone: true }).defaultNow(),
+  lastCountedAt: timestamp('last_counted_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+  updatedBy: uuid('updated_by').references(() => profiles.id),
+}, (table) => ({
+  orgItemIdx: index('inventory_stocks_org_item_idx').on(table.orgId, table.itemId),
+  locationIdx: index('inventory_stocks_location_idx').on(table.locationId),
+  expirationIdx: index('inventory_stocks_expiration_idx').on(table.orgId, table.expirationDate),
+}));
+
+export const inventoryMovements = pgTable('inventory_movements', {
+  id: uuid('id').primaryKey().default(sql`uuid_generate_v4()`),
+  orgId: uuid('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  itemId: uuid('item_id').notNull().references(() => inventoryItems.id, { onDelete: 'cascade' }),
+  movementType: text('movement_type', {
+    enum: ['purchase', 'transfer', 'usage', 'adjustment_in', 'adjustment_out', 'return', 'waste'],
+  }).notNull(),
+  fromStockId: uuid('from_stock_id').references(() => inventoryStocks.id, { onDelete: 'set null' }),
+  toStockId: uuid('to_stock_id').references(() => inventoryStocks.id, { onDelete: 'set null' }),
+  fromLocationId: uuid('from_location_id').references(() => inventoryLocations.id, { onDelete: 'set null' }),
+  toLocationId: uuid('to_location_id').references(() => inventoryLocations.id, { onDelete: 'set null' }),
+  blockId: uuid('block_id').references(() => blocks.id, { onDelete: 'set null' }),
+  applicationRecordId: uuid('application_record_id').references(() => applicationRecords.id, { onDelete: 'set null' }),
+  quantity: decimal('quantity', { precision: 12, scale: 2 }).notNull(),
+  unitCost: decimal('unit_cost', { precision: 12, scale: 2 }),
+  lotCode: text('lot_code'),
+  expirationDate: date('expiration_date'),
+  referenceNumber: text('reference_number'),
+  vendorName: text('vendor_name'),
+  notes: text('notes'),
+  occurredAt: timestamp('occurred_at', { withTimezone: true }).notNull().defaultNow(),
+  performedBy: uuid('performed_by').notNull().references(() => profiles.id),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+}, (table) => ({
+  orgOccurredIdx: index('inventory_movements_org_occurred_idx').on(table.orgId, table.occurredAt),
+  itemIdx: index('inventory_movements_item_idx').on(table.itemId),
+  blockIdx: index('inventory_movements_block_idx').on(table.blockId),
+  appRecordUnq: unique('inventory_movements_application_record_unq').on(table.applicationRecordId),
+}));
 
 export const degreeDayRecords = pgTable('degree_day_records', {
   id: uuid('id').primaryKey().default(sql`uuid_generate_v4()`),
